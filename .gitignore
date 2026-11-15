@@ -1,4 +1,4 @@
-# Unity Generated Folders
+# Unity generated folders
 [Ll]ibrary/
 [Tt]emp/
 [Oo]bj/
@@ -8,6 +8,13 @@
 [Uu]ser[Ss]ettings/
 [Mm]emoryCaptures/
 [Rr]ecordings/
+
+# Unity project user/cache files
+.vs/
+.idea/
+.vscode/
+*.csproj
+*.sln
 
 # Asset store packages
 [Aa]ssets/AssetStoreTools*

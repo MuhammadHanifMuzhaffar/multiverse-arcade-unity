@@ -8,60 +8,56 @@ using UnityEngine;
 namespace Multiverse.Editor
 {
     /// <summary>
-    /// Automasi pendaftaran scene ke Build Settings untuk proyek Arcade Multiverse.
-    /// Memastikan scene Hub selalu berada pada Index 0 dan setiap scene game terdaftar secara deterministik.
+    /// Registers only the six explicitly approved scenes, in a stable order.
+    /// Does not modify Build Settings if any required scene is missing.
     /// </summary>
     public static class SceneAutoRegister
     {
         private const string HubScenePath = "Assets/Hub/Scenes/MainMenu.unity";
-        private const string GamesRootPath = "Assets/Games";
+        private static readonly string[] RequiredGameScenes =
+        {
+            "Assets/Games/CyberNeonDodger/Scenes/CyberNeonDodger_Main.unity",
+            "Assets/Games/DragonHunter/Scenes/DragonHunter_Main.unity",
+            "Assets/Games/CozyFruitCatcher/Scenes/CozyFruitCatcher_Main.unity",
+            "Assets/Games/DeepSeaExplorer/Scenes/DeepSeaExplorer_Main.unity",
+            "Assets/Games/SkyGlider/Scenes/SkyGlider_Main.unity"
+        };
 
         [MenuItem("Tools/Multiverse/Register All Scenes to Build Settings", false, 10)]
         public static void RegisterAllScenes()
         {
-            List<EditorBuildSettingsScene> buildScenes = new List<EditorBuildSettingsScene>();
+            List<string> missing = new List<string>();
+            List<string> scenePaths = new List<string> { HubScenePath };
+            scenePaths.AddRange(RequiredGameScenes);
 
-            // 1. Scene Hub selalu menjadi Index 0
-            if (File.Exists(HubScenePath))
+            foreach (string scenePath in scenePaths)
             {
-                buildScenes.Add(new EditorBuildSettingsScene(HubScenePath, true));
-                Debug.Log($"[Multiverse] Registered Index 0 (Hub): {HubScenePath}");
-            }
-            else
-            {
-                Debug.LogWarning($"[Multiverse] Hub scene belum ditemukan di '{HubScenePath}'. Harap buat/simpan MainMenu.unity.");
+                if (!File.Exists(scenePath))
+                    missing.Add(scenePath);
             }
 
-            // 2. Deteksi otomatis seluruh scene game di dalam Assets/Games/
-            if (Directory.Exists(GamesRootPath))
+            if (missing.Count > 0)
             {
-                string[] discoveredScenes = Directory.GetFiles(GamesRootPath, "*.unity", SearchOption.AllDirectories);
-                Array.Sort(discoveredScenes, StringComparer.OrdinalIgnoreCase);
-
-                foreach (string scenePath in discoveredScenes)
-                {
-                    string normalizedPath = scenePath.Replace('\\', '/');
-                    if (normalizedPath != HubScenePath)
-                    {
-                        buildScenes.Add(new EditorBuildSettingsScene(normalizedPath, true));
-                        Debug.Log($"[Multiverse] Registered Game Scene (Index {buildScenes.Count - 1}): {normalizedPath}");
-                    }
-                }
-            }
-            else
-            {
-                Debug.LogWarning($"[Multiverse] Folder games belum ditemukan di '{GamesRootPath}'.");
+                string message = "Build Settings tidak diubah karena scene wajib belum tersedia:\n\n" +
+                                 string.Join("\n", missing);
+                Debug.LogError("[Multiverse] " + message);
+                EditorUtility.DisplayDialog("Multiverse Scene Registration dibatalkan", message, "OK");
+                return;
             }
 
-            // 3. Terapkan ke EditorBuildSettings
-            EditorBuildSettings.scenes = buildScenes.ToArray();
-            Debug.Log($"[Multiverse] Sukses mendaftarkan {buildScenes.Count} scene ke Build Settings.");
+            EditorBuildSettingsScene[] buildScenes = new EditorBuildSettingsScene[scenePaths.Count];
+            for (int i = 0; i < scenePaths.Count; i++)
+            {
+                buildScenes[i] = new EditorBuildSettingsScene(scenePaths[i], true);
+            }
 
+            EditorBuildSettings.scenes = buildScenes;
+            AssetDatabase.SaveAssets();
+            Debug.Log("[Multiverse] Enam scene wajib terdaftar. MainMenu berada di index 0.");
             EditorUtility.DisplayDialog(
-                "Multiverse Scene Auto-Register",
-                $"Berhasil mendaftarkan {buildScenes.Count} scene ke Build Settings.\n\nScene Index 0: MainMenu (Hub).",
-                "OK"
-            );
+                "Multiverse Scene Registration berhasil",
+                "Enam scene terdaftar; MainMenu berada di index 0.",
+                "OK");
         }
     }
 }

@@ -90,7 +90,11 @@
 3. **Automasi Pendaftaran Scene (`SceneAutoRegister.cs`):**
    * Pendaftaran scene ke `Build Settings` dilakukan secara terprogram melalui menu Unity `Tools > Multiverse > Register All Scenes to Build Settings`. Scene `MainMenu` selalu di posisi 0, diikuti 5 scene game lainnya.
 4. **Git Sandbox Monorepo:**
-   * Struktur folder `Assets/Games/<GameName>/` memastikan isolasi GUID `.meta` 100%, sehingga merge pull request dari 5 anggota tidak akan pernah mengalami konflik.
+   * Struktur folder `Assets/Games/<GameName>/` memisahkan kepemilikan aset per game dan mengurangi risiko konflik. Isolasi folder tidak menjamin konflik Git mustahil: perubahan pada Hub, pengaturan proyek, file bersama, atau file di luar folder PIC tetap memerlukan review dan resolusi integrator.
+5. **Aturan Aset Unik Menyeluruh:**
+   * Tidak boleh memakai ulang atau membagikan aset antar-game. Ini mencakup model, mesh, tekstur, sprite, material, shader, audio, musik, font, animasi, prefab, UI/artwork, dan aset pihak ketiga.
+   * Setiap aset game harus berada dalam folder game pemiliknya. Aset pihak ketiga harus dicatat sumber dan lisensinya; duplikasi ke folder lain tidak menjadikannya aset yang berbeda.
+   * Kode infrastruktur untuk integrasi aplikasi (misalnya navigasi Hub) bukan aset konten game. Batas ini adalah interpretasi kerja dan harus mengikuti klarifikasi dosen bila definisinya lebih luas.
 
 ---
 

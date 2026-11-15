@@ -33,8 +33,10 @@
    ```
 
 ### B. Aturan Pengerjaan & Komitmen
-- **HANYA sentuh folder game milik sendiri** (`Assets/Games/<FolderAnda>/`). Dilarang keras mengedit atau memindahkan file di folder game anggota lain atau folder `Assets/Hub/`.
-- Seluruh aset baru (model, sprite, audio, script) wajib disimpan di dalam folder game masing-masing.
+- **HANYA sentuh folder game milik sendiri** (`Assets/Games/<FolderAnda>/`). Jangan mengedit atau memindahkan file di folder game anggota lain. Perubahan `Assets/Hub/` dan pengaturan global hanya dilakukan oleh Integrator.
+- Seluruh aset konten game wajib unik dan eksklusif: model, mesh, tekstur, sprite, material, shader, audio/musik, font, animasi, prefab, UI/artwork, serta aset pihak ketiga. Dilarang memakai ulang aset yang sama antar-game, termasuk dengan menyalin atau mengganti nama file. Catat sumber dan lisensi aset eksternal.
+- Kode infrastruktur integrasi Hub diperlakukan sebagai kode bersama, bukan aset konten game; jika dosen menafsirkan larangan lebih luas, ikuti ketentuan dosen.
+- Gunakan `git status` dan review daftar file sebelum `git add`; hindari `git add .` jika terdapat perubahan di luar folder PIC.
 
 ### C. Alur Simpan & Setor (Push ke GitHub)
 1. Simpan scene di Unity (`Ctrl + S`).
@@ -44,7 +46,7 @@
    git commit -m "feat: implementasi mekanik baru"
    git push origin game/<nama-anda>
    ```
-3. Buat Pull Request (PR) ke branch `main` di GitHub untuk di-review oleh Integrator.
+3. Sebelum commit, pastikan `git status` hanya memuat file milikmu, lalu tambahkan file yang diperlukan secara eksplisit (contoh: `git add Assets/Games/<FolderAnda>/`). Buat Pull Request (PR) ke branch `main` untuk ditinjau Integrator. Folder terpisah mengurangi risiko, tetapi tidak menjamin konflik nol.
 
 ---
 
@@ -78,7 +80,14 @@
 
 ---
 
-## 4. Alur Integrasi & Final Build
+## 4. Batas Verifikasi & Kriteria Integrasi
+
+- Repo memuat scaffolding, bukan scene Unity siap main. Scene `.unity` harus dibuat dan disimpan di Unity Editor bersama `.meta`-nya.
+- `SceneAutoRegister` hanya akan mengubah Build Settings jika Hub dan kelima scene resmi semuanya tersedia.
+- Setelah perubahan Unity, integrator wajib menguji import project dari clone bersih, memeriksa Console tanpa error, menguji Hub → setiap game → Hub, lalu membuat build Windows.
+- Status Git LFS perlu diverifikasi pada laptop sebelum mengunggah aset binary; konfigurasi `.gitattributes` sendiri bukan bukti LFS sudah terpasang/berfungsi.
+
+## 5. Alur Integrasi & Final Build
 1. Integrator (Venator / Velmiree) memverifikasi semua PR telah ter-merge ke `main`.
 2. Buka project di Unity Editor pada laptop Integrator.
 3. Jalankan menu `Tools > Multiverse > Register All Scenes to Build Settings`.
