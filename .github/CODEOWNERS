@@ -1,0 +1,18 @@
+# Pemilik kode. Dengan branch protection "Require review from Code Owners",
+# perubahan pada sebuah folder wajib disetujui pemiliknya.
+# Pemilik harus berstatus Collaborator (write) di repo ini.
+
+# Default: area bersama dikelola Integrator
+*                       @MuhammadHanifMuzhaffar @NovendraAnggoroAdjiNugroho
+/Assets/Hub/            @MuhammadHanifMuzhaffar @NovendraAnggoroAdjiNugroho
+/Assets/Editor/         @MuhammadHanifMuzhaffar @NovendraAnggoroAdjiNugroho
+/ProjectSettings/       @MuhammadHanifMuzhaffar @NovendraAnggoroAdjiNugroho
+/Packages/              @MuhammadHanifMuzhaffar @NovendraAnggoroAdjiNugroho
+/.github/               @MuhammadHanifMuzhaffar @NovendraAnggoroAdjiNugroho
+
+# Folder eksklusif per game (PIC)
+/Assets/Games/CyberNeonDodger/   @NovendraAnggoroAdjiNugroho
+/Assets/Games/DragonHunter/      @MuhammadHanifMuzhaffar
+/Assets/Games/CozyFruitCatcher/  @NimatulAzizah
+/Assets/Games/DeepSeaExplorer/   @KaishanAryaSetiko
+/Assets/Games/SkyGlider/         @ZidniiAghniyaRajwa
