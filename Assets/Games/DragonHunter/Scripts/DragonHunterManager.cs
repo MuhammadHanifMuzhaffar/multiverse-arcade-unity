@@ -40,10 +40,12 @@ namespace Multiverse.Games.DragonHunter
         [SerializeField] private GameObject victoryPanel;
         [SerializeField] private GameObject defeatPanel;
 
-        private bool isInvulnerable = false; // Efek i-frame saat dodge roll
+        // I-frame berbasis waktu akhir (bukan flag bool + coroutine) agar dodge beruntun
+        // tidak saling memotong: coroutine pertama dulu bisa mematikan i-frame dodge kedua.
+        private float iFrameEndTime = -1f;
         private bool isBattleOver = false;
 
-        public bool IsInvulnerable => isInvulnerable;
+        public bool IsInvulnerable => Time.time < iFrameEndTime;
         public bool IsBattleOver => isBattleOver;
 
         private void Start()
@@ -53,7 +55,9 @@ namespace Multiverse.Games.DragonHunter
             currentDragonHP = maxDragonHP;
             currentDragonState = DragonState.Idle;
             isBattleOver = false;
+            iFrameEndTime = -1f;
 
+            SetDragonState(currentDragonState); // isi bossStatusText sejak awal
             UpdateUI();
             if (victoryPanel != null) victoryPanel.SetActive(false);
             if (defeatPanel != null) defeatPanel.SetActive(false);
@@ -76,7 +80,7 @@ namespace Multiverse.Games.DragonHunter
         /// </summary>
         public void HunterAttack(float damage)
         {
-            if (isBattleOver) return;
+            if (isBattleOver || damage <= 0f) return;
 
             // Jika naga dalam status Vulnerable, berikan critical multiplier 1.5x
             float finalDamage = (currentDragonState == DragonState.Vulnerable) ? damage * 1.5f : damage;
@@ -99,15 +103,9 @@ namespace Multiverse.Games.DragonHunter
             if (isBattleOver || currentStamina < dodgeStaminaCost) return false;
 
             currentStamina -= dodgeStaminaCost;
-            StartCoroutine(DodgeIFrameRoutine(iframeDuration));
+            iFrameEndTime = Mathf.Max(iFrameEndTime, Time.time + iframeDuration);
+            UpdateUI();
             return true;
-        }
-
-        private System.Collections.IEnumerator DodgeIFrameRoutine(float duration)
-        {
-            isInvulnerable = true;
-            yield return new WaitForSeconds(duration);
-            isInvulnerable = false;
         }
 
         /// <summary>
@@ -115,7 +113,7 @@ namespace Multiverse.Games.DragonHunter
         /// </summary>
         public void DamageHunter(float damage)
         {
-            if (isBattleOver || isInvulnerable) return;
+            if (isBattleOver || IsInvulnerable || damage <= 0f) return;
 
             currentHunterHP = Mathf.Max(0f, currentHunterHP - damage);
             Debug.Log($"[DragonHunter] Hunter terkena serangan! Sisa HP: {currentHunterHP}");

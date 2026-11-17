@@ -1,63 +1,91 @@
 #if UNITY_EDITOR
-using System;
 using System.Collections.Generic;
-using System.IO;
+using Multiverse.Hub;
 using UnityEditor;
 using UnityEngine;
 
-namespace Multiverse.Editor
+namespace Multiverse.EditorTools
 {
     /// <summary>
-    /// Registers only the six explicitly approved scenes, in a stable order.
-    /// Does not modify Build Settings if any required scene is missing.
+    /// Mendaftarkan scene resmi ke Build Settings dengan urutan stabil (MainMenu = index 0).
+    /// Mode STRICT: tidak mengubah apa pun jika ada scene wajib yang hilang.
+    /// Mode PARTIAL: untuk masa development, mendaftarkan scene yang sudah ada saja.
     /// </summary>
     public static class SceneAutoRegister
     {
-        private const string HubScenePath = "Assets/Hub/Scenes/MainMenu.unity";
-        private static readonly string[] RequiredGameScenes =
-        {
-            "Assets/Games/CyberNeonDodger/Scenes/CyberNeonDodger_Main.unity",
-            "Assets/Games/DragonHunter/Scenes/DragonHunter_Main.unity",
-            "Assets/Games/CozyFruitCatcher/Scenes/CozyFruitCatcher_Main.unity",
-            "Assets/Games/DeepSeaExplorer/Scenes/DeepSeaExplorer_Main.unity",
-            "Assets/Games/SkyGlider/Scenes/SkyGlider_Main.unity"
-        };
-
         [MenuItem("Tools/Multiverse/Register All Scenes to Build Settings", false, 10)]
         public static void RegisterAllScenes()
         {
-            List<string> missing = new List<string>();
-            List<string> scenePaths = new List<string> { HubScenePath };
-            scenePaths.AddRange(RequiredGameScenes);
+            Register(strict: true, interactive: true);
+        }
 
-            foreach (string scenePath in scenePaths)
+        [MenuItem("Tools/Multiverse/Register Available Scenes (Partial, Dev)", false, 11)]
+        public static void RegisterAvailableScenes()
+        {
+            Register(strict: false, interactive: true);
+        }
+
+        /// <summary>
+        /// CLI: Unity.exe -batchmode -quit -projectPath ... -executeMethod
+        /// Multiverse.EditorTools.SceneAutoRegister.RegisterAllScenesBatch
+        /// </summary>
+        public static void RegisterAllScenesBatch()
+        {
+            bool ok = Register(strict: true, interactive: false);
+            EditorApplication.Exit(ok ? 0 : 1);
+        }
+
+        /// <summary>Registrasi strict tanpa dialog (dipakai SceneScaffolder & validator).</summary>
+        public static bool RegisterAllScenesQuiet()
+        {
+            return Register(strict: true, interactive: false);
+        }
+
+        private static bool SceneExists(string path)
+        {
+            return AssetDatabase.LoadAssetAtPath<SceneAsset>(path) != null;
+        }
+
+        private static bool Register(bool strict, bool interactive)
+        {
+            var missing = new List<string>();
+            var scenePaths = new List<string>();
+
+            if (SceneExists(SceneCatalog.HubScenePath)) scenePaths.Add(SceneCatalog.HubScenePath);
+            else missing.Add(SceneCatalog.HubScenePath);
+
+            foreach (SceneCatalog.GameEntry game in SceneCatalog.Games)
             {
-                if (!File.Exists(scenePath))
-                    missing.Add(scenePath);
+                if (SceneExists(game.ScenePath)) scenePaths.Add(game.ScenePath);
+                else missing.Add(game.ScenePath);
             }
 
-            if (missing.Count > 0)
+            bool hubMissing = missing.Contains(SceneCatalog.HubScenePath);
+            if (hubMissing || (strict && missing.Count > 0))
             {
                 string message = "Build Settings tidak diubah karena scene wajib belum tersedia:\n\n" +
                                  string.Join("\n", missing);
                 Debug.LogError("[Multiverse] " + message);
-                EditorUtility.DisplayDialog("Multiverse Scene Registration dibatalkan", message, "OK");
-                return;
+                if (interactive)
+                    EditorUtility.DisplayDialog("Multiverse Scene Registration dibatalkan", message, "OK");
+                return false;
             }
 
-            EditorBuildSettingsScene[] buildScenes = new EditorBuildSettingsScene[scenePaths.Count];
+            var buildScenes = new EditorBuildSettingsScene[scenePaths.Count];
             for (int i = 0; i < scenePaths.Count; i++)
-            {
                 buildScenes[i] = new EditorBuildSettingsScene(scenePaths[i], true);
-            }
 
             EditorBuildSettings.scenes = buildScenes;
             AssetDatabase.SaveAssets();
-            Debug.Log("[Multiverse] Enam scene wajib terdaftar. MainMenu berada di index 0.");
-            EditorUtility.DisplayDialog(
-                "Multiverse Scene Registration berhasil",
-                "Enam scene terdaftar; MainMenu berada di index 0.",
-                "OK");
+
+            string summary = $"{scenePaths.Count} scene terdaftar; MainMenu berada di index 0.";
+            if (missing.Count > 0)
+                summary += "\n\nBelum tersedia (dilewati):\n" + string.Join("\n", missing);
+
+            Debug.Log("[Multiverse] " + summary);
+            if (interactive)
+                EditorUtility.DisplayDialog("Multiverse Scene Registration berhasil", summary, "OK");
+            return true;
         }
     }
 }

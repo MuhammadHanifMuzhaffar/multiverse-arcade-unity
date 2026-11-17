@@ -1,0 +1,16 @@
+{
+    "name": "Multiverse.Games.SkyGlider",
+    "rootNamespace": "Multiverse.Games.SkyGlider",
+    "references": [
+        "UnityEngine.UI"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
