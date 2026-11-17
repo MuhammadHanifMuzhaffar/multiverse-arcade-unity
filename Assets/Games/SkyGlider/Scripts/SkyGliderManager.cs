@@ -27,8 +27,11 @@ namespace Multiverse.Games.SkyGlider
 
         private void Start()
         {
-            highestAltitude = 0f;
-            currentAltitude = 0f;
+            // Mulai dari posisi glider sebenarnya; jika tidak (mis. spawn di y = -4 atau y = 20),
+            // rekor 0 palsu membuat game over terpicu / rekor salah di frame pertama.
+            float startAltitude = gliderTransform != null ? gliderTransform.position.y : 0f;
+            highestAltitude = startAltitude;
+            currentAltitude = startAltitude;
             isGameOver = false;
 
             UpdateUI();

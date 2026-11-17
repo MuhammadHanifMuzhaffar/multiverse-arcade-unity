@@ -1,0 +1,24 @@
+{
+    "name": "Multiverse.EditorTools",
+    "rootNamespace": "Multiverse.EditorTools",
+    "references": [
+        "UnityEngine.UI",
+        "Multiverse.Hub",
+        "Multiverse.Games.CyberNeonDodger",
+        "Multiverse.Games.DragonHunter",
+        "Multiverse.Games.CozyFruitCatcher",
+        "Multiverse.Games.DeepSeaExplorer",
+        "Multiverse.Games.SkyGlider"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
