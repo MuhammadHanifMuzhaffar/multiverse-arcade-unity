@@ -1,4 +1,4 @@
-# Dragon Hunter — Dokumen Desain & Teknis (Sprint 1–3)
+# Dragon Hunter — Dokumen Desain & Teknis (Sprint 1–4)
 
 PIC: Muhammad Hanif (Velmiree) · Scene: `Scenes/DragonHunter_Main.unity` · Assembly: `Multiverse.Games.DragonHunter`
 
@@ -123,6 +123,10 @@ DH_CAPTURE_DIR=<folder> Unity.exe -batchmode -projectPath <path> -runTests -test
 DH_PERF_FILE=<file.txt> Unity.exe -batchmode -projectPath <path> -runTests -testPlatform PlayMode -testFilter MeasureCombatPerformance
 ```
 
-## 8. Berikutnya (Sprint 4: rilis)
+## 8. Sprint 4: Rilis
 
-Build final `.exe` setelah keempat game lain masuk ke `main`, ulangi `HubIntegrationTests`, lalu playtest manual di laptop 1366x768.
+- Seluruh 24 PlayMode test lulus di **player build Windows** (`-runTests -testPlatform StandaloneWindows64`), bukan hanya di Editor.
+- Build rilis bersih + smoke test + paket zip ber-checksum (detail di laporan akhir).
+- Laporan akhir untuk penilaian: [`docs/dragon-hunter/LAPORAN_AKHIR_DRAGON_HUNTER.md`](../../../docs/dragon-hunter/LAPORAN_AKHIR_DRAGON_HUNTER.md) (dengan screenshot di `docs/dragon-hunter/images/`).
+
+Sisa untuk tim: build final 5-in-1 setelah keempat game lain masuk ke `main`, lalu jalankan ulang `HubIntegrationTests`.
