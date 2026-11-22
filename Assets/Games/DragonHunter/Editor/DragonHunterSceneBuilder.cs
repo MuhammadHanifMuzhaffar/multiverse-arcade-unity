@@ -872,12 +872,15 @@ namespace Multiverse.Games.DragonHunter.EditorTools
             Text potion = CreateText(canvas, "Potions", "Potion x3  [R]", 24, TextColor, TextAnchor.MiddleLeft);
             Place(potion.rectTransform, TopLeft, new Vector2(48f, -118f), new Vector2(400f, 34f));
 
-            // Tengah atas: naga
+            // Tengah bawah: naga (boss bar). Sprint 3: dipindah dari tengah atas karena bertumpuk
+            // dengan blok Hunter di semua resolusi (terdeteksi UiLayoutTests).
+            Image bossBacking = CreateImage(canvas, "BossBarBacking", new Color(0.06f, 0.04f, 0.03f, 0.62f));
+            Place(bossBacking.rectTransform, BottomCenter, new Vector2(0f, 12f), new Vector2(900f, 128f));
             Text dragonName = CreateText(canvas, "DragonName", "EMBERSCALE WYVERN", 30, TextColor, TextAnchor.MiddleCenter);
-            Place(dragonName.rectTransform, TopCenter, new Vector2(0f, -30f), new Vector2(900f, 40f));
-            UIBar dragonBar = CreateBar(canvas, "DragonHP", TopCenter, new Vector2(0f, -76f), new Vector2(900f, 20f), Accent, Hex("#F0E6DF"));
-            Text state = CreateText(canvas, "DragonState", "Stalking", 26, AccentSoft, TextAnchor.MiddleCenter);
-            Place(state.rectTransform, TopCenter, new Vector2(0f, -112f), new Vector2(900f, 36f));
+            Place(dragonName.rectTransform, BottomCenter, new Vector2(0f, 90f), new Vector2(820f, 40f));
+            UIBar dragonBar = CreateBar(canvas, "DragonHP", BottomCenter, new Vector2(0f, 64f), new Vector2(820f, 20f), Accent, Hex("#F0E6DF"));
+            Text state = CreateText(canvas, "DragonState", "Stalking", 24, AccentSoft, TextAnchor.MiddleCenter);
+            Place(state.rectTransform, BottomCenter, new Vector2(0f, 24f), new Vector2(820f, 34f));
 
             // Kanan atas: timer dan mode kamera
             Text timer = CreateText(canvas, "Timer", "00:00", 36, TextColor, TextAnchor.MiddleRight);
@@ -889,14 +892,12 @@ namespace Multiverse.Games.DragonHunter.EditorTools
             Text message = CreateText(canvas, "Message", "", 54, AccentSoft, TextAnchor.MiddleCenter);
             Place(message.rectTransform, Center, new Vector2(0f, 190f), new Vector2(1400f, 80f));
             message.gameObject.AddComponent<Outline>().effectColor = new Color(0f, 0f, 0f, 0.6f);
-            Image reticle = CreateImage(canvas, "Reticle", new Color(TextColor.r, TextColor.g, TextColor.b, 0.55f));
-            Place(reticle.rectTransform, Center, Vector2.zero, new Vector2(6f, 6f));
 
-            // Kiri bawah: panduan kontrol
+            // Kiri atas di bawah status Hunter: panduan kontrol (bawah layar dipakai boss bar).
             Text hint = CreateText(canvas, "ControlsHint",
                 "WASD Move   Shift Sprint   Space Dodge\nLMB Combo   RMB Heavy   E Arrow   R Potion\nTab Lock-on   Esc Pause",
-                20, TextMuted, TextAnchor.LowerLeft);
-            Place(hint.rectTransform, BottomLeft, new Vector2(48f, 40f), new Vector2(760f, 90f));
+                18, TextMuted, TextAnchor.UpperLeft);
+            Place(hint.rectTransform, TopLeft, new Vector2(48f, -164f), new Vector2(620f, 80f));
 
             Set(hud, "hunterHealthBar", hpBar);
             Set(hud, "hunterStaminaBar", staminaBar);
@@ -1009,6 +1010,7 @@ namespace Multiverse.Games.DragonHunter.EditorTools
         private static readonly Vector2 TopCenter = new Vector2(0.5f, 1f);
         private static readonly Vector2 TopRight = new Vector2(1f, 1f);
         private static readonly Vector2 BottomLeft = new Vector2(0f, 0f);
+        private static readonly Vector2 BottomCenter = new Vector2(0.5f, 0f);
         private static readonly Vector2 Center = new Vector2(0.5f, 0.5f);
 
         private static Renderer Part(Mesh mesh, string name, Transform parent, Vector3 localPos, Vector3 localEuler,
@@ -1121,16 +1123,18 @@ namespace Multiverse.Games.DragonHunter.EditorTools
 
         private static Button CreateButton(Transform parent, string name, string label, int index)
         {
-            Image img = CreateImage(parent, name, SurfaceHover);
+            // Image putih: transisi ColorTint MENGALIKAN warna Image, jadi warna asli diatur lewat ColorBlock.
+            // (Sprint 3: sebelumnya SurfaceHover x SurfaceHover membuat tombol nyaris hitam.)
+            Image img = CreateImage(parent, name, Color.white);
             img.raycastTarget = true;
             Place(img.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -index * 92f), new Vector2(460f, 76f));
 
             var button = img.gameObject.AddComponent<Button>();
             button.targetGraphic = img;
             ColorBlock cb = button.colors;
-            cb.normalColor = SurfaceHover;
-            cb.highlightedColor = Hex("#4A3226");
-            cb.selectedColor = SurfaceHover;
+            cb.normalColor = Hex("#4A3226");
+            cb.highlightedColor = Hex("#6B4532");
+            cb.selectedColor = Hex("#4A3226");
             cb.pressedColor = Accent;
             cb.disabledColor = new Color(SurfaceHover.r, SurfaceHover.g, SurfaceHover.b, 0.4f);
             cb.colorMultiplier = 1f;

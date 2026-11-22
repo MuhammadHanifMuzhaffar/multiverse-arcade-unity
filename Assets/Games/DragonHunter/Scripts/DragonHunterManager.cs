@@ -37,7 +37,11 @@ namespace Multiverse.Games.DragonHunter
         [SerializeField] private bool lockCursorDuringFight = true;
 
         private float resultShowTime = -1f;
-        private int previousTargetFrameRate;
+
+        // Saat Retry, OnDestroy manager lama bisa terpanggil setelah Awake/Start manager baru.
+        // Penghitung instance memastikan state global hanya dipulihkan saat manager terakhir hilang.
+        private static int liveInstances;
+        private static int frameRateBeforeGame;
         private bool newRecord;
 
         private BattlePhase phase = BattlePhase.Fighting;
@@ -72,7 +76,7 @@ namespace Multiverse.Games.DragonHunter
 
         private void Awake()
         {
-            previousTargetFrameRate = Application.targetFrameRate;
+            if (liveInstances++ == 0) frameRateBeforeGame = Application.targetFrameRate;
             Application.targetFrameRate = 60;
 
             // Mulai dari state global yang bersih, apa pun yang ditinggalkan scene sebelumnya.
@@ -105,9 +109,11 @@ namespace Multiverse.Games.DragonHunter
             if (combat != null) combat.HitLanded -= HandleHitLanded;
 
             // Pengaman terakhir saat scene ditinggalkan (ReturnToHub juga mereset ini).
+            if (--liveInstances > 0) return; // scene Dragon Hunter baru (Retry) sudah mengambil alih
+            liveInstances = 0;
             Time.timeScale = 1f;
             AudioListener.pause = false;
-            Application.targetFrameRate = previousTargetFrameRate;
+            Application.targetFrameRate = frameRateBeforeGame;
             ApplyCursor(locked: false);
         }
 
@@ -240,8 +246,12 @@ namespace Multiverse.Games.DragonHunter
             if (panel != null) panel.SetActive(visible);
         }
 
+        /// <summary>Permintaan kunci kursor terakhir (bisa diuji di batchmode yang tidak punya jendela/kursor).</summary>
+        public static bool CursorLockRequested { get; private set; }
+
         private static void ApplyCursor(bool locked)
         {
+            CursorLockRequested = locked;
             Cursor.lockState = locked ? CursorLockMode.Locked : CursorLockMode.None;
             Cursor.visible = !locked;
         }
