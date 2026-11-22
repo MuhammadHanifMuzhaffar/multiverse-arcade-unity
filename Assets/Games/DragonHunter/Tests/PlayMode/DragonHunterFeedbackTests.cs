@@ -107,6 +107,40 @@ namespace Multiverse.Games.DragonHunter.Tests
         }
 
         [UnityTest]
+        public IEnumerator Camera_DoesNotClipIntoDragon()
+        {
+            // Hunter di sisi kanan naga, kamera di sisi kiri: tubuh naga berada di antara keduanya.
+            dragon.Halt();
+            var cc = hunter.GetComponent<CharacterController>();
+            cc.enabled = false;
+            hunter.transform.position = new Vector3(4f, 0.05f, 6f);
+            cc.enabled = true;
+            var rig = Object.FindObjectOfType<ThirdPersonCamera>();
+            rig.SetOrbit(90f, 8f); // kamera menghadap +X, jadi berada di -X dari Hunter
+            yield return new WaitForSeconds(0.6f);
+
+            Assert.Less(rig.CurrentDistance, 4f, "Kamera harus ditarik mendekat saat terhalang tubuh naga.");
+
+            Vector3 camPos = rig.transform.position;
+            foreach (Collider c in Physics.OverlapSphere(camPos, 0.1f, ~0, QueryTriggerInteraction.Ignore))
+                Assert.IsNull(c.GetComponent<DragonHurtbox>(), "Kamera berada di dalam collider naga: " + c.name);
+        }
+
+        [Test]
+        public void PanelButtons_AreVisiblyLighterThanPanel()
+        {
+            // Regresi Sprint 3: Image tombol harus putih agar tint ColorBlock tidak menggelapkan dua kali.
+            foreach (Button b in Object.FindObjectsOfType<Button>(true))
+            {
+                var img = b.targetGraphic as Image;
+                Assert.IsNotNull(img, b.name);
+                Assert.AreEqual(Color.white, img.color, b.name + ": warna Image harus putih (warna diatur ColorBlock)");
+                Color normal = b.colors.normalColor;
+                Assert.Greater(normal.r + normal.g + normal.b, 0.3f, b.name + ": warna normal tombol terlalu gelap");
+            }
+        }
+
+        [UnityTest]
         public IEnumerator Victory_FadesMusic()
         {
             dragon.ReceiveHit(99999f, dragon.AimPoint, true);

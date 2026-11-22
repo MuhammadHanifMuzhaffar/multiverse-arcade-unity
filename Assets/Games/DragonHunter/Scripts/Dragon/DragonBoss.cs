@@ -67,6 +67,12 @@ namespace Multiverse.Games.DragonHunter
         public float BodyRadius => bodyRadius;
         public DragonAttackDefinition CurrentAttack => brain?.CurrentAttack;
         public IReadOnlyList<DragonAttackDefinition> Attacks => attacks;
+        /// <summary>
+        /// Bila false, naga tetap mengejar/menghadap Hunter tetapi tidak memilih jurus sendiri
+        /// (dipakai alat capture/test untuk memaksa jurus tertentu secara deterministik).
+        /// </summary>
+        public bool AutoAttack { get; set; } = true;
+
         public Vector3 AimPoint => aimPoint != null ? aimPoint.position : transform.position + Vector3.up * 2f;
 
         /// <summary>(damage diterima, terkena saat Vulnerable?)</summary>
@@ -190,7 +196,7 @@ namespace Multiverse.Games.DragonHunter
             float facingAngle = toHunter.sqrMagnitude > 0.01f ? Vector3.Angle(transform.forward, toHunter) : 0f;
             bool hunterBehind = facingAngle > 110f;
 
-            if (brain.CanStartAttack)
+            if (AutoAttack && brain.CanStartAttack)
             {
                 DragonAttackDefinition choice = ChooseAttack(distance, hunterBehind);
                 // Jurus lingkaran tidak perlu menghadap; terjangan butuh bidikan lebih presisi.

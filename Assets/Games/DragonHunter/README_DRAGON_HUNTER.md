@@ -1,4 +1,4 @@
-# Dragon Hunter — Dokumen Desain & Teknis (Sprint 1–2)
+# Dragon Hunter — Dokumen Desain & Teknis (Sprint 1–3)
 
 PIC: Muhammad Hanif (Velmiree) · Scene: `Scenes/DragonHunter_Main.unity` · Assembly: `Multiverse.Games.DragonHunter`
 
@@ -56,7 +56,7 @@ Scripts/
                  DragonHunterAudio, DragonHunterVfx
 Editor/   DragonHunterSceneBuilder, DragonHunterMeshLibrary (asmdef Editor sendiri)
 Tools~/   generate_audio.py (diabaikan Unity)
-Tests/    EditMode (41 test) · PlayMode (15 test di scene asli)
+Tests/    EditMode (53 test) · PlayMode (24 test + 2 alat capture/perf opsional)
 Materials/ 28 material · Models/ 8 mesh · Audio/ 23 clip · Fonts/ Cinzel (OFL)
 ```
 
@@ -97,6 +97,32 @@ Catatan teknis:
 - Efek partikel memakai `Emit()` pada sistem yang sudah ada (tanpa Instantiate per hit).
 - Test baru: `Sprint2AssetTests` (mesh menghadap keluar, < 10.000 tris, audio .ogg, panjang dua lapis musik identik, lisensi font) dan `DragonHunterFeedbackTests` (semua clip terpasang, crossfade Enraged, trail + percikan saat pedang kena, font Cinzel di seluruh UI, musik memudar saat menang).
 
-## 7. Berikutnya (Sprint 3: integrasi)
+## 7. Sprint 3: Integrasi Hub & Pengujian
 
-Uji Hub → Dragon Hunter → Hub di build bersama empat game lain, cek audio tidak bocor ke Hub, dan uji resolusi 1366x768.
+| Area | Hasil |
+| :-- | :-- |
+| Hub → Dragon Hunter → Hub | `HubIntegrationTests`: masuk lewat portal `HubManager`, keluar lewat tombol Back to Hub asli (dari pause, panel menang, panel kalah). Setelah kembali: `timeScale` 1, `AudioListener.pause` false, volume 1, kursor lepas, `targetFrameRate` dipulihkan, 1 AudioListener, tidak ada objek/audio/panah Dragon Hunter yang tertinggal |
+| Retry | Quest baru bersih; manager lama tidak lagi melepas kursor/`targetFrameRate` milik quest baru (bug urutan `OnDestroy` diperbaiki dengan penghitung instance) |
+| Kebocoran memori | Tiga putaran Hub ↔ Dragon Hunter: jumlah Mesh/Material tidak bertambah |
+| Lima game | Semua scene game bisa dimuat dari Hub dan kembali tanpa state rusak |
+| UI multi-resolusi | `UiLayoutTests` di 1920x1080, 1366x768, 1280x720, 1440x900, 1280x1024, 2560x1080: semua elemen di dalam layar, blok HUD tidak bertumpuk |
+| Visual | Screenshot GPU ditinjau (`CaptureAndPerfTests`, aktif dengan `DH_CAPTURE_DIR`) |
+| Performa (editor, RTX 4050) | Main thread ±0,2 ms/frame saat bertarung, memori terpakai ±110 MB (target PRD: 60 FPS, < 4 GB). Alokasi GC ±80 B/frame di atas baseline editor (diukur dengan `DH_PERF_FILE`) |
+
+Perbaikan dari temuan Sprint 3:
+- Boss bar dipindah ke **tengah bawah** dengan latar gelap (sebelumnya bertumpuk dengan status Hunter di semua resolusi). Panduan kontrol dipindah ke bawah status Hunter.
+- Tombol panel nyaris hitam: Image tombol kini putih, warna diatur ColorBlock (tint dikalikan dua kali).
+- Kamera tidak lagi menembus tubuh naga/dinding (sphere cast, ditarik mendekat lalu kembali halus).
+- Titik bidik di tengah layar dihapus (panah sudah membidik otomatis).
+- `DragonBoss.AutoAttack` dan `ThirdPersonCamera.SetOrbit` untuk test/capture yang deterministik.
+
+Cara memakai alat opsional (Unity batchmode **tanpa** `-nographics`):
+
+```
+DH_CAPTURE_DIR=<folder> Unity.exe -batchmode -projectPath <path> -runTests -testPlatform PlayMode -testFilter CaptureKeyMoments
+DH_PERF_FILE=<file.txt> Unity.exe -batchmode -projectPath <path> -runTests -testPlatform PlayMode -testFilter MeasureCombatPerformance
+```
+
+## 8. Berikutnya (Sprint 4: rilis)
+
+Build final `.exe` setelah keempat game lain masuk ke `main`, ulangi `HubIntegrationTests`, lalu playtest manual di laptop 1366x768.

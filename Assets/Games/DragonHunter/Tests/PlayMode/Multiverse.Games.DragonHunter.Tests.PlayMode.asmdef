@@ -4,7 +4,8 @@
     "references": [
         "Multiverse.Games.DragonHunter",
         "UnityEngine.TestRunner",
-        "UnityEngine.UI"
+        "UnityEngine.UI",
+        "Multiverse.Hub"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
