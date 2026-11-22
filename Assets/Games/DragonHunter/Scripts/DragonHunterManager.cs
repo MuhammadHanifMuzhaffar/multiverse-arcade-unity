@@ -40,7 +40,21 @@ namespace Multiverse.Games.DragonHunter
         private int previousTargetFrameRate;
         private bool newRecord;
 
-        public BattlePhase Phase { get; private set; } = BattlePhase.Fighting;
+        private BattlePhase phase = BattlePhase.Fighting;
+
+        public BattlePhase Phase
+        {
+            get => phase;
+            private set
+            {
+                if (phase == value) return;
+                phase = value;
+                PhaseChanged?.Invoke(value);
+            }
+        }
+
+        /// <summary>Dipicu setiap fase pertarungan berubah (audio menang/kalah, dsb.).</summary>
+        public event System.Action<BattlePhase> PhaseChanged;
         public float ElapsedTime { get; private set; }
         public bool IsBattleOver => Phase == BattlePhase.Victory || Phase == BattlePhase.Defeat;
         public bool IsPaused => Phase == BattlePhase.Paused;
