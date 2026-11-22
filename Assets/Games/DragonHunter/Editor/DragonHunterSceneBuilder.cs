@@ -40,7 +40,14 @@ namespace Multiverse.Games.DragonHunter.EditorTools
             public Material HunterArmor, HunterCloak, HunterHelm, HunterVisor, Blade, Gold, Arrow;
             public Material DragonScale, DragonDark, DragonBelly, DragonWing, DragonHorn, DragonEye;
             public Material TelegraphWarn, TelegraphActive, Fire;
+            public Material Spark, Dust, HitEmber, SlashTrail, ArrowTrail, Shockwave, AmbientEmber;
         }
+
+        // Diisi di awal Build(); dipakai helper pembuat objek.
+        private static DragonHunterMeshLibrary.Set meshes;
+        private static Font uiFont;
+        private static DragonHunterAudio clickAudio;
+        private const string AudioFolder = Root + "/Audio";
 
         [MenuItem("Tools/Multiverse/Dragon Hunter/Rebuild Scene", false, 100)]
         public static void RebuildFromMenu()
@@ -73,6 +80,9 @@ namespace Multiverse.Games.DragonHunter.EditorTools
 
         public static void Build()
         {
+            meshes = DragonHunterMeshLibrary.EnsureAll();
+            uiFont = AssetDatabase.LoadAssetAtPath<Font>(Root + "/Fonts/Cinzel-Variable.ttf");
+            ConfigureAudioImports();
             Palette p = CreateMaterials();
 
             var scene = AssetDatabase.LoadAssetAtPath<SceneAsset>(ScenePath) != null
@@ -108,8 +118,13 @@ namespace Multiverse.Games.DragonHunter.EditorTools
             Set(input, "cameraRig", cameraRig);
             Set(input, "manager", manager);
 
+            DragonHunterAudio audio = CreateAudio(managerGo.transform, manager, hunter, combat, dragon);
+            clickAudio = audio;
+            CreateVfx(p, hunter, combat, dragon, cameraRig);
+
             CreateEventSystem();
             BuildUi(manager, out DragonHunterHUD hud);
+            clickAudio = null;
 
             Set(manager, "hunter", hunter);
             Set(manager, "combat", combat);
@@ -154,7 +169,14 @@ namespace Multiverse.Games.DragonHunter.EditorTools
 
                 TelegraphWarn = Unlit("M_DH_TelegraphWarn", new Color(1f, 0.55f, 0.2f, 0.32f)),
                 TelegraphActive = Unlit("M_DH_TelegraphActive", new Color(1f, 0.24f, 0.1f, 0.55f)),
-                Fire = ParticleMaterial("M_DH_FireParticle", new Color(1f, 0.55f, 0.18f, 0.8f)),
+                Fire = ParticleMaterial("M_DH_FireParticle", new Color(1f, 0.55f, 0.18f, 0.8f), additive: true),
+                Spark = ParticleMaterial("M_DH_Spark", new Color(1f, 0.85f, 0.55f, 0.9f), additive: true),
+                HitEmber = ParticleMaterial("M_DH_HitEmber", new Color(1f, 0.4f, 0.12f, 0.8f), additive: true),
+                AmbientEmber = ParticleMaterial("M_DH_AmbientEmber", new Color(1f, 0.5f, 0.2f, 0.7f), additive: true),
+                Dust = ParticleMaterial("M_DH_Dust", new Color(0.45f, 0.36f, 0.3f, 0.55f), additive: false),
+                SlashTrail = Unlit("M_DH_SlashTrail", new Color(1f, 0.92f, 0.8f, 0.85f)),
+                ArrowTrail = Unlit("M_DH_ArrowTrail", new Color(1f, 0.75f, 0.35f, 0.6f)),
+                Shockwave = Unlit("M_DH_Shockwave", new Color(1f, 0.45f, 0.15f, 0.75f)),
             };
 
             AssetDatabase.SaveAssets();
@@ -192,11 +214,13 @@ namespace Multiverse.Games.DragonHunter.EditorTools
             return m;
         }
 
-        private static Material ParticleMaterial(string name, Color tint)
+        private static Material ParticleMaterial(string name, Color tint, bool additive)
         {
-            Material m = LoadOrCreate(name, "Legacy Shaders/Particles/Additive", "Sprites/Default");
+            Material m = LoadOrCreate(name, additive ? "Legacy Shaders/Particles/Additive" : "Legacy Shaders/Particles/Alpha Blended",
+                                      "Sprites/Default");
             if (m.HasProperty("_TintColor")) m.SetColor("_TintColor", tint);
             else m.color = tint;
+            if (meshes != null && meshes.SoftParticle != null && m.HasProperty("_MainTex")) m.mainTexture = meshes.SoftParticle;
             EditorUtility.SetDirty(m);
             return m;
         }
@@ -276,6 +300,198 @@ namespace Multiverse.Games.DragonHunter.EditorTools
             }
         }
 
+        private static void CreateAmbientEmbers(Transform parent, Material material)
+        {
+            var go = new GameObject("AmbientEmbers");
+            go.transform.SetParent(parent, false);
+            go.transform.localPosition = new Vector3(0f, 0.2f, 0f);
+            var ps = go.AddComponent<ParticleSystem>();
+            ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+
+            ParticleSystem.MainModule main = ps.main;
+            main.loop = true;
+            main.playOnAwake = true;
+            main.prewarm = true;
+            main.duration = 5f;
+            main.startLifetime = new ParticleSystem.MinMaxCurve(4f, 7f);
+            main.startSpeed = new ParticleSystem.MinMaxCurve(0.4f, 1.3f);
+            main.startSize = new ParticleSystem.MinMaxCurve(0.06f, 0.16f);
+            main.startColor = new ParticleSystem.MinMaxGradient(Hex("#FFB25A"), Hex("#FF5A1F"));
+            main.simulationSpace = ParticleSystemSimulationSpace.World;
+            main.maxParticles = 220;
+
+            ParticleSystem.EmissionModule emission = ps.emission;
+            emission.rateOverTime = 28f;
+
+            ParticleSystem.ShapeModule shape = ps.shape;
+            shape.shapeType = ParticleSystemShapeType.Box;
+            shape.scale = new Vector3(38f, 38f, 0.2f);
+            shape.rotation = new Vector3(-90f, 0f, 0f); // bidang datar, emisi ke atas
+
+            ParticleSystem.NoiseModule noiseModule = ps.noise;
+            noiseModule.enabled = true;
+            noiseModule.strength = 0.6f;
+            noiseModule.frequency = 0.3f;
+
+            ParticleSystem.ColorOverLifetimeModule col = ps.colorOverLifetime;
+            col.enabled = true;
+            var gradient = new Gradient();
+            gradient.SetKeys(new[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(Color.white, 1f) },
+                             new[] { new GradientAlphaKey(0f, 0f), new GradientAlphaKey(1f, 0.2f), new GradientAlphaKey(0f, 1f) });
+            col.color = new ParticleSystem.MinMaxGradient(gradient);
+
+            ConfigureParticleRenderer(go, material);
+        }
+
+        private static ParticleSystem CreateBurstSystem(string name, Transform parent, Material material, Color a, Color b,
+                                                        Vector2 speed, Vector2 size, Vector2 life, float gravity,
+                                                        ParticleSystemShapeType shapeType, float radius)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            var ps = go.AddComponent<ParticleSystem>();
+            ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+
+            ParticleSystem.MainModule main = ps.main;
+            main.loop = false;
+            main.playOnAwake = false;
+            main.startLifetime = new ParticleSystem.MinMaxCurve(life.x, life.y);
+            main.startSpeed = new ParticleSystem.MinMaxCurve(speed.x, speed.y);
+            main.startSize = new ParticleSystem.MinMaxCurve(size.x, size.y);
+            main.startColor = new ParticleSystem.MinMaxGradient(a, b);
+            main.startRotation = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
+            main.gravityModifier = gravity;
+            main.simulationSpace = ParticleSystemSimulationSpace.World;
+            main.maxParticles = 400;
+
+            ParticleSystem.EmissionModule emission = ps.emission;
+            emission.rateOverTime = 0f;
+
+            ParticleSystem.ShapeModule shape = ps.shape;
+            shape.shapeType = shapeType;
+            shape.radius = radius;
+            if (shapeType == ParticleSystemShapeType.Circle) shape.rotation = new Vector3(-90f, 0f, 0f);
+
+            ParticleSystem.ColorOverLifetimeModule col = ps.colorOverLifetime;
+            col.enabled = true;
+            var gradient = new Gradient();
+            gradient.SetKeys(new[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(Color.white, 1f) },
+                             new[] { new GradientAlphaKey(1f, 0f), new GradientAlphaKey(0f, 1f) });
+            col.color = new ParticleSystem.MinMaxGradient(gradient);
+
+            ParticleSystem.SizeOverLifetimeModule sizeModule = ps.sizeOverLifetime;
+            sizeModule.enabled = true;
+            sizeModule.size = new ParticleSystem.MinMaxCurve(1f, AnimationCurve.Linear(0f, 1f, 1f, gravity < 0f ? 2.2f : 0.3f));
+
+            ConfigureParticleRenderer(go, material);
+            return ps;
+        }
+
+        private static void ConfigureParticleRenderer(GameObject go, Material material)
+        {
+            var renderer = go.GetComponent<ParticleSystemRenderer>();
+            renderer.sharedMaterial = material;
+            renderer.renderMode = ParticleSystemRenderMode.Billboard;
+            renderer.shadowCastingMode = ShadowCastingMode.Off;
+            renderer.receiveShadows = false;
+        }
+
+        private static void CreateVfx(Palette p, HunterController hunter, HunterCombat combat, DragonBoss dragon, ThirdPersonCamera cameraRig)
+        {
+            var root = new GameObject("VFX");
+            ParticleSystem sparks = CreateBurstSystem("HitSparks", root.transform, p.Spark, Hex("#FFF1C9"), Hex("#FFB347"),
+                                                      new Vector2(4f, 11f), new Vector2(0.08f, 0.22f), new Vector2(0.15f, 0.4f), 1.2f,
+                                                      ParticleSystemShapeType.Sphere, 0.2f);
+            ParticleSystem embers = CreateBurstSystem("HitEmbers", root.transform, p.HitEmber, Hex("#FF8A3D"), Hex("#C8361B"),
+                                                      new Vector2(1.5f, 4f), new Vector2(0.15f, 0.4f), new Vector2(0.4f, 0.9f), -0.2f,
+                                                      ParticleSystemShapeType.Sphere, 0.35f);
+            ParticleSystem dust = CreateBurstSystem("Dust", root.transform, p.Dust, Hex("#6B574A"), Hex("#3E322B"),
+                                                    new Vector2(1.5f, 5f), new Vector2(0.6f, 1.6f), new Vector2(0.6f, 1.4f), -0.05f,
+                                                    ParticleSystemShapeType.Circle, 1.5f);
+
+            var ring = new GameObject("NovaShockwave");
+            ring.transform.SetParent(root.transform, false);
+            ring.AddComponent<MeshFilter>().sharedMesh = meshes.Ring;
+            var ringRenderer = ring.AddComponent<MeshRenderer>();
+            ConfigureFlatRenderer(ringRenderer, p.Shockwave);
+
+            var vfx = root.AddComponent<DragonHunterVfx>();
+            Set(vfx, "hunter", hunter);
+            Set(vfx, "combat", combat);
+            Set(vfx, "dragon", dragon);
+            Set(vfx, "cameraRig", cameraRig);
+            Set(vfx, "sparks", sparks);
+            Set(vfx, "dust", dust);
+            Set(vfx, "hitEmbers", embers);
+            Set(vfx, "shockwave", ringRenderer);
+        }
+
+        // ================================================================= Audio
+        private static readonly string[] MusicClips = { "DH_Music_Battle", "DH_Music_BattleEnraged" };
+
+        private static void ConfigureAudioImports()
+        {
+            foreach (string guid in AssetDatabase.FindAssets("t:AudioClip", new[] { AudioFolder }))
+            {
+                string path = AssetDatabase.GUIDToAssetPath(guid);
+                var importer = AssetImporter.GetAtPath(path) as AudioImporter;
+                if (importer == null) continue;
+
+                bool music = path.Contains("/Music/");
+                AudioImporterSampleSettings settings = importer.defaultSampleSettings;
+                // Musik: terkompresi di memori agar kedua lapis bisa dimulai sinkron. SFX: dekompresi saat load (latensi rendah).
+                AudioClipLoadType loadType = music ? AudioClipLoadType.CompressedInMemory : AudioClipLoadType.DecompressOnLoad;
+                float quality = music ? 0.6f : 0.7f;
+                if (settings.loadType == loadType && settings.compressionFormat == AudioCompressionFormat.Vorbis
+                    && Mathf.Approximately(settings.quality, quality) && !importer.loadInBackground)
+                    continue;
+
+                settings.loadType = loadType;
+                settings.compressionFormat = AudioCompressionFormat.Vorbis;
+                settings.quality = quality;
+                importer.defaultSampleSettings = settings;
+                importer.loadInBackground = false;
+                importer.SaveAndReimport();
+            }
+        }
+
+        private static AudioClip Clip(string name)
+        {
+            string folder = Array.IndexOf(MusicClips, name) >= 0 ? "/Music/" : "/SFX/";
+            var clip = AssetDatabase.LoadAssetAtPath<AudioClip>(AudioFolder + folder + name + ".ogg");
+            if (clip == null) throw new InvalidOperationException("Audio tidak ditemukan: " + name + " (jalankan Tools~/generate_audio.py)");
+            return clip;
+        }
+
+        private static DragonHunterAudio CreateAudio(Transform parent, DragonHunterManager manager, HunterController hunter,
+                                                     HunterCombat combat, DragonBoss dragon)
+        {
+            var go = new GameObject("Audio");
+            go.transform.SetParent(parent, false);
+            var audio = go.AddComponent<DragonHunterAudio>();
+            Set(audio, "manager", manager);
+            Set(audio, "hunter", hunter);
+            Set(audio, "combat", combat);
+            Set(audio, "dragon", dragon);
+
+            var map = new Dictionary<string, string>
+            {
+                { "swordSwing1", "DH_Sfx_SwordSwing1" }, { "swordSwing2", "DH_Sfx_SwordSwing2" },
+                { "swordHit", "DH_Sfx_SwordHit" }, { "heavyHit", "DH_Sfx_HeavyHit" },
+                { "arrowShoot", "DH_Sfx_ArrowShoot" }, { "arrowHit", "DH_Sfx_ArrowHit" },
+                { "dodge", "DH_Sfx_Dodge" }, { "hunterHurt", "DH_Sfx_HunterHurt" }, { "potion", "DH_Sfx_Potion" },
+                { "dragonGrowl", "DH_Sfx_DragonGrowl" }, { "dragonRoar", "DH_Sfx_DragonRoar" },
+                { "dragonHurt", "DH_Sfx_DragonHurt" }, { "dragonDeath", "DH_Sfx_DragonDeath" },
+                { "biteSnap", "DH_Sfx_BiteSnap" }, { "tailWhoosh", "DH_Sfx_TailWhoosh" },
+                { "fireBreath", "DH_Sfx_FireBreath" }, { "chargeStomp", "DH_Sfx_ChargeStomp" },
+                { "novaBlast", "DH_Sfx_NovaBlast" },
+                { "musicBattle", "DH_Music_Battle" }, { "musicEnraged", "DH_Music_BattleEnraged" },
+                { "victory", "DH_Sfx_Victory" }, { "defeat", "DH_Sfx_Defeat" }, { "uiClick", "DH_Sfx_UiClick" },
+            };
+            foreach (KeyValuePair<string, string> pair in map) Set(audio, "clips." + pair.Key, Clip(pair.Value));
+            return audio;
+        }
+
         private static void CreateArena(Palette p)
         {
             var arena = new GameObject("Arena").transform;
@@ -315,6 +531,8 @@ namespace Multiverse.Games.DragonHunter.EditorTools
                           new Vector3(2.2f, height, 2.2f), p.Pillar, collider: false);
             }
 
+            CreateAmbientEmbers(arena, p.AmbientEmber);
+
             // Retakan bara di lantai.
             for (int i = 0; i < 18; i++)
             {
@@ -347,22 +565,50 @@ namespace Multiverse.Games.DragonHunter.EditorTools
 
             var renderers = new List<Renderer>
             {
-                Primitive(PrimitiveType.Capsule, "Body", visual, new Vector3(0f, 0.85f, 0f), Vector3.zero, new Vector3(0.8f, 0.75f, 0.8f), p.HunterArmor),
-                Primitive(PrimitiveType.Cube, "Cloak", visual, new Vector3(0f, 1.0f, -0.38f), new Vector3(8f, 0f, 0f), new Vector3(0.78f, 1.0f, 0.1f), p.HunterCloak),
-                Primitive(PrimitiveType.Sphere, "Helm", visual, new Vector3(0f, 1.72f, 0f), Vector3.zero, new Vector3(0.44f, 0.44f, 0.44f), p.HunterHelm),
-                Primitive(PrimitiveType.Cube, "Crest", visual, new Vector3(0f, 1.98f, -0.02f), Vector3.zero, new Vector3(0.06f, 0.14f, 0.36f), p.HunterCloak),
-                Primitive(PrimitiveType.Cube, "ShoulderL", visual, new Vector3(-0.42f, 1.38f, 0f), new Vector3(0f, 0f, 18f), new Vector3(0.3f, 0.14f, 0.36f), p.HunterHelm),
-                Primitive(PrimitiveType.Cube, "ShoulderR", visual, new Vector3(0.42f, 1.38f, 0f), new Vector3(0f, 0f, -18f), new Vector3(0.3f, 0.14f, 0.36f), p.HunterHelm),
+                // Badan & kaki
+                Part(meshes.Frustum, "Torso", visual, new Vector3(0f, 1.12f, 0f), new Vector3(-90f, 0f, 0f), new Vector3(0.62f, 0.4f, 0.62f), p.HunterArmor),
+                Part(meshes.Frustum, "Waist", visual, new Vector3(0f, 0.78f, 0f), new Vector3(-90f, 0f, 0f), new Vector3(0.5f, 0.36f, 0.24f), p.HunterCloak),
+                Part(meshes.Frustum, "LegL", visual, new Vector3(-0.15f, 0.36f, 0f), new Vector3(-90f, 0f, 0f), new Vector3(0.2f, 0.24f, 0.72f), p.HunterHelm),
+                Part(meshes.Frustum, "LegR", visual, new Vector3(0.15f, 0.36f, 0f), new Vector3(-90f, 0f, 0f), new Vector3(0.2f, 0.24f, 0.72f), p.HunterHelm),
+                Part(meshes.Orb, "PauldronL", visual, new Vector3(-0.38f, 1.4f, 0f), new Vector3(0f, 0f, 20f), new Vector3(0.36f, 0.22f, 0.4f), p.HunterHelm),
+                Part(meshes.Orb, "PauldronR", visual, new Vector3(0.38f, 1.4f, 0f), new Vector3(0f, 0f, -20f), new Vector3(0.36f, 0.22f, 0.4f), p.HunterHelm),
+                Part(meshes.Frustum, "ArmL", visual, new Vector3(-0.42f, 1.08f, 0.04f), new Vector3(-90f, 0f, 8f), new Vector3(0.15f, 0.15f, 0.55f), p.HunterArmor),
+                // Kepala
+                Part(meshes.Orb, "Helm", visual, new Vector3(0f, 1.72f, 0f), Vector3.zero, new Vector3(0.44f, 0.46f, 0.46f), p.HunterHelm),
+                Part(meshes.Cone, "HelmHornL", visual, new Vector3(-0.2f, 1.86f, -0.02f), new Vector3(-60f, -30f, 0f), new Vector3(0.08f, 0.08f, 0.28f), p.DragonHorn),
+                Part(meshes.Cone, "HelmHornR", visual, new Vector3(0.2f, 1.86f, -0.02f), new Vector3(-60f, 30f, 0f), new Vector3(0.08f, 0.08f, 0.28f), p.DragonHorn),
+                // Jubah & tabung panah
+                Part(meshes.Cape, "Cape", visual, new Vector3(0f, 1.46f, -0.3f), new Vector3(8f, 0f, 0f), new Vector3(0.7f, 1.12f, 1f), p.HunterCloak),
+                Part(meshes.Frustum, "Quiver", visual, new Vector3(0.2f, 1.2f, -0.34f), new Vector3(-70f, 0f, -20f), new Vector3(0.14f, 0.14f, 0.6f), p.Gold),
             };
-            Primitive(PrimitiveType.Cube, "Visor", visual, new Vector3(0f, 1.74f, 0.2f), Vector3.zero, new Vector3(0.3f, 0.07f, 0.06f), p.HunterVisor);
+            Part(meshes.Frustum, "Visor", visual, new Vector3(0f, 1.73f, 0.21f), Vector3.zero, new Vector3(0.3f, 0.07f, 0.06f), p.HunterVisor);
 
             Transform swordPivot = new GameObject("SwordPivot").transform;
             swordPivot.SetParent(visual, false);
             swordPivot.localPosition = new Vector3(0.48f, 1.1f, 0.15f);
             swordPivot.localRotation = Quaternion.Euler(-20f, 0f, 0f);
-            Primitive(PrimitiveType.Cube, "Grip", swordPivot, new Vector3(0f, 0f, -0.08f), Vector3.zero, new Vector3(0.06f, 0.06f, 0.3f), p.HunterCloak);
-            Primitive(PrimitiveType.Cube, "Guard", swordPivot, new Vector3(0f, 0f, 0.1f), Vector3.zero, new Vector3(0.34f, 0.06f, 0.07f), p.Gold);
-            Primitive(PrimitiveType.Cube, "Blade", swordPivot, new Vector3(0f, 0f, 0.9f), Vector3.zero, new Vector3(0.09f, 0.03f, 1.5f), p.Blade);
+            renderers.Add(Part(meshes.Frustum, "ArmR", swordPivot, new Vector3(0f, 0f, -0.22f), Vector3.zero, new Vector3(0.15f, 0.15f, 0.4f), p.HunterArmor));
+            Part(meshes.Frustum, "Grip", swordPivot, new Vector3(0f, 0f, -0.02f), Vector3.zero, new Vector3(0.06f, 0.06f, 0.28f), p.HunterCloak);
+            Part(meshes.Frustum, "Guard", swordPivot, new Vector3(0f, 0f, 0.13f), Vector3.zero, new Vector3(0.38f, 0.07f, 0.07f), p.Gold);
+            Part(meshes.Blade, "Blade", swordPivot, new Vector3(0f, 0f, 0.16f), Vector3.zero, new Vector3(0.14f, 0.3f, 1.55f), p.Blade);
+
+            Transform bladeTip = new GameObject("BladeTrail").transform;
+            bladeTip.SetParent(swordPivot, false);
+            bladeTip.localPosition = new Vector3(0f, 0f, 1.35f);
+            var trail = bladeTip.gameObject.AddComponent<TrailRenderer>();
+            trail.sharedMaterial = p.SlashTrail;
+            trail.time = 0.14f;
+            trail.minVertexDistance = 0.05f;
+            trail.widthMultiplier = 0.5f;
+            trail.widthCurve = AnimationCurve.Linear(0f, 1f, 1f, 0f);
+            var trailGradient = new Gradient();
+            trailGradient.SetKeys(
+                new[] { new GradientColorKey(Hex("#FFE7C2"), 0f), new GradientColorKey(Hex("#FF8A3D"), 1f) },
+                new[] { new GradientAlphaKey(0.9f, 0f), new GradientAlphaKey(0f, 1f) });
+            trail.colorGradient = trailGradient;
+            trail.shadowCastingMode = ShadowCastingMode.Off;
+            trail.receiveShadows = false;
+            trail.emitting = false;
 
             Transform arrowSpawn = new GameObject("ArrowSpawn").transform;
             arrowSpawn.SetParent(root.transform, false);
@@ -379,6 +625,8 @@ namespace Multiverse.Games.DragonHunter.EditorTools
             Set(combat, "swordPivot", swordPivot);
             Set(combat, "arrowSpawn", arrowSpawn);
             Set(combat, "arrowMaterial", p.Arrow);
+            Set(combat, "swordTrail", trail);
+            Set(combat, "arrowTrailMaterial", p.ArrowTrail);
 
             input = root.AddComponent<HunterInput>();
             return hunter;
@@ -403,63 +651,87 @@ namespace Multiverse.Games.DragonHunter.EditorTools
             var flashTargets = new List<Renderer>();
 
             // Tubuh
-            Renderer torso = Primitive(PrimitiveType.Sphere, "Torso", visual, new Vector3(0f, 2.0f, 0f), Vector3.zero, new Vector3(2.6f, 2.0f, 4.6f), p.DragonScale);
+            Renderer torso = Part(meshes.Orb, "Torso", visual, new Vector3(0f, 2.0f, 0f), Vector3.zero, new Vector3(2.7f, 2.1f, 4.7f), p.DragonScale);
             Hurtbox(torso.gameObject, dragon, 1f, "Body", new Vector3(0.9f, 0.9f, 0.9f));
             flashTargets.Add(torso);
-            flashTargets.Add(Primitive(PrimitiveType.Sphere, "Belly", visual, new Vector3(0f, 1.6f, 0.15f), Vector3.zero, new Vector3(2.0f, 1.4f, 3.6f), p.DragonBelly));
+            flashTargets.Add(Part(meshes.Orb, "Belly", visual, new Vector3(0f, 1.6f, 0.2f), Vector3.zero, new Vector3(2.0f, 1.4f, 3.7f), p.DragonBelly));
+            flashTargets.Add(Part(meshes.Orb, "Chest", visual, new Vector3(0f, 2.2f, 1.7f), new Vector3(-15f, 0f, 0f), new Vector3(2.0f, 1.9f, 1.8f), p.DragonScale));
 
-            for (int i = 0; i < 5; i++)
+            for (int i = 0; i < 7; i++)
             {
-                flashTargets.Add(Primitive(PrimitiveType.Cube, "Spine_" + i, visual, new Vector3(0f, 3.05f - i * 0.08f, 1.4f - i * 0.75f),
-                                           new Vector3(45f, 0f, 0f), new Vector3(0.32f, 0.32f, 0.32f) * (1f - i * 0.1f), p.DragonHorn));
+                float s = 0.55f - i * 0.05f;
+                flashTargets.Add(Part(meshes.Spike, "Spine_" + i, visual, new Vector3(0f, 3.0f - i * 0.06f, 1.6f - i * 0.62f),
+                                      new Vector3(-10f, 0f, 0f), new Vector3(s * 0.6f, s, s * 0.9f), p.DragonHorn));
             }
 
             // Leher + kepala
-            flashTargets.Add(Primitive(PrimitiveType.Cube, "Neck", visual, new Vector3(0f, 2.95f, 2.3f), new Vector3(-35f, 0f, 0f), new Vector3(0.95f, 0.95f, 1.9f), p.DragonScale));
+            flashTargets.Add(Part(meshes.Frustum, "Neck", visual, new Vector3(0f, 2.95f, 2.45f), new Vector3(-38f, 0f, 0f), new Vector3(1.0f, 1.0f, 2.0f), p.DragonScale));
+            flashTargets.Add(Part(meshes.Spike, "NeckSpike", visual, new Vector3(0f, 3.55f, 2.6f), new Vector3(-30f, 0f, 0f), new Vector3(0.3f, 0.45f, 0.4f), p.DragonHorn));
 
             Transform head = new GameObject("Head").transform;
             head.SetParent(visual, false);
-            head.localPosition = new Vector3(0f, 3.5f, 3.3f);
+            head.localPosition = new Vector3(0f, 3.5f, 3.35f);
             var headBox = head.gameObject.AddComponent<BoxCollider>();
             headBox.center = new Vector3(0f, -0.1f, 0.5f);
             headBox.size = new Vector3(1.3f, 1.2f, 2.7f);
             head.gameObject.AddComponent<DragonHurtbox>().Configure(dragon, 1.3f, "Head");
 
-            flashTargets.Add(Primitive(PrimitiveType.Cube, "Skull", head, Vector3.zero, Vector3.zero, new Vector3(1.1f, 0.9f, 1.5f), p.DragonScale));
-            flashTargets.Add(Primitive(PrimitiveType.Cube, "Snout", head, new Vector3(0f, -0.1f, 1.1f), Vector3.zero, new Vector3(0.8f, 0.5f, 1.0f), p.DragonScale));
-            flashTargets.Add(Primitive(PrimitiveType.Cube, "Jaw", head, new Vector3(0f, -0.45f, 0.85f), new Vector3(8f, 0f, 0f), new Vector3(0.75f, 0.2f, 1.2f), p.DragonBelly));
-            flashTargets.Add(Primitive(PrimitiveType.Cube, "HornL", head, new Vector3(-0.38f, 0.55f, -0.5f), new Vector3(-35f, -15f, 0f), new Vector3(0.16f, 0.16f, 1.1f), p.DragonHorn));
-            flashTargets.Add(Primitive(PrimitiveType.Cube, "HornR", head, new Vector3(0.38f, 0.55f, -0.5f), new Vector3(-35f, 15f, 0f), new Vector3(0.16f, 0.16f, 1.1f), p.DragonHorn));
-            Primitive(PrimitiveType.Cube, "EyeL", head, new Vector3(-0.42f, 0.15f, 0.55f), Vector3.zero, new Vector3(0.12f, 0.1f, 0.22f), p.DragonEye);
-            Primitive(PrimitiveType.Cube, "EyeR", head, new Vector3(0.42f, 0.15f, 0.55f), Vector3.zero, new Vector3(0.12f, 0.1f, 0.22f), p.DragonEye);
+            flashTargets.Add(Part(meshes.Frustum, "Skull", head, Vector3.zero, Vector3.zero, new Vector3(1.15f, 0.95f, 1.5f), p.DragonScale));
+            flashTargets.Add(Part(meshes.Frustum, "Snout", head, new Vector3(0f, -0.08f, 1.15f), Vector3.zero, new Vector3(0.82f, 0.55f, 1.1f), p.DragonScale));
+            flashTargets.Add(Part(meshes.Frustum, "Jaw", head, new Vector3(0f, -0.46f, 0.85f), new Vector3(10f, 0f, 0f), new Vector3(0.76f, 0.22f, 1.3f), p.DragonBelly));
+            for (int i = 0; i < 4; i++)
+            {
+                float x = (i % 2 == 0 ? -1f : 1f) * (0.22f + (i / 2) * 0.12f);
+                Part(meshes.Cone, "Fang_" + i, head, new Vector3(x, -0.33f, 1.45f - (i / 2) * 0.3f), new Vector3(90f, 0f, 0f), new Vector3(0.08f, 0.08f, 0.2f), p.DragonHorn);
+            }
+            // Tanduk menyapu ke belakang-atas (+ tanduk kecil di bawahnya)
+            for (int side = -1; side <= 1; side += 2)
+            {
+                string s = side < 0 ? "L" : "R";
+                flashTargets.Add(Part(meshes.Cone, "Horn" + s, head, new Vector3(0.36f * side, 0.38f, -0.35f),
+                                      new Vector3(-150f, -18f * side, 0f), new Vector3(0.28f, 0.28f, 1.35f), p.DragonHorn));
+                flashTargets.Add(Part(meshes.Cone, "HornSmall" + s, head, new Vector3(0.5f * side, 0.05f, -0.5f),
+                                      new Vector3(-170f, -35f * side, 0f), new Vector3(0.16f, 0.16f, 0.6f), p.DragonHorn));
+            }
+            Part(meshes.Frustum, "EyeL", head, new Vector3(-0.44f, 0.15f, 0.58f), new Vector3(0f, -12f, 0f), new Vector3(0.1f, 0.1f, 0.26f), p.DragonEye);
+            Part(meshes.Frustum, "EyeR", head, new Vector3(0.44f, 0.15f, 0.58f), new Vector3(0f, 12f, 0f), new Vector3(0.1f, 0.1f, 0.26f), p.DragonEye);
 
             ParticleSystem fire = CreateFireParticles(head, p.Fire);
 
-            // Ekor
+            // Ekor meruncing dengan duri
             Vector3[] tailPos = { new Vector3(0f, 1.9f, -2.7f), new Vector3(0f, 1.6f, -4.1f), new Vector3(0f, 1.3f, -5.4f), new Vector3(0f, 1.0f, -6.6f) };
-            Vector3[] tailSize = { new Vector3(1.0f, 0.9f, 1.7f), new Vector3(0.8f, 0.7f, 1.6f), new Vector3(0.6f, 0.5f, 1.5f), new Vector3(0.4f, 0.35f, 1.3f) };
+            Vector3[] tailSize = { new Vector3(1.1f, 1.0f, 1.7f), new Vector3(0.85f, 0.75f, 1.6f), new Vector3(0.62f, 0.55f, 1.5f), new Vector3(0.42f, 0.38f, 1.3f) };
             for (int i = 0; i < tailPos.Length; i++)
             {
-                Renderer segment = Primitive(PrimitiveType.Cube, "Tail_" + i, visual, tailPos[i], new Vector3(-8f, 0f, 0f), tailSize[i], i % 2 == 0 ? p.DragonScale : p.DragonDark);
+                Renderer segment = Part(meshes.Frustum, "Tail_" + i, visual, tailPos[i], new Vector3(-8f, 0f, 0f), tailSize[i], i % 2 == 0 ? p.DragonScale : p.DragonDark);
                 Hurtbox(segment.gameObject, dragon, 0.8f, "Tail", Vector3.one);
                 flashTargets.Add(segment);
+                flashTargets.Add(Part(meshes.Spike, "TailSpike_" + i, visual, tailPos[i] + new Vector3(0f, tailSize[i].y * 0.45f, 0f),
+                                      new Vector3(-20f, 0f, 0f), new Vector3(0.25f, 0.4f, 0.4f) * (1f - i * 0.15f), p.DragonHorn));
             }
-            flashTargets.Add(Primitive(PrimitiveType.Cube, "TailBlade", visual, new Vector3(0f, 0.95f, -7.5f), new Vector3(0f, 45f, 0f), new Vector3(0.8f, 0.08f, 0.8f), p.DragonHorn));
+            flashTargets.Add(Part(meshes.Spike, "TailBladeL", visual, new Vector3(-0.1f, 0.95f, -7.4f), new Vector3(0f, -30f, 90f), new Vector3(0.7f, 0.7f, 0.12f), p.DragonHorn));
+            flashTargets.Add(Part(meshes.Spike, "TailBladeR", visual, new Vector3(0.1f, 0.95f, -7.4f), new Vector3(0f, 30f, -90f), new Vector3(0.7f, 0.7f, 0.12f), p.DragonHorn));
 
-            // Kaki (hurtbox rendah agar serangan pedang di tanah tetap kena)
+            // Kaki (hurtbox rendah agar serangan pedang di tanah tetap kena) + cakar
             for (int i = 0; i < 4; i++)
             {
                 float x = i % 2 == 0 ? -1.05f : 1.05f;
                 float z = i < 2 ? 1.3f : -1.2f;
-                Renderer leg = Primitive(PrimitiveType.Cylinder, "Leg_" + i, visual, new Vector3(x, 0.9f, z), Vector3.zero, new Vector3(0.6f, 0.9f, 0.6f), p.DragonDark);
-                Hurtbox(leg.gameObject, dragon, 1f, "Leg", new Vector3(1f, 2f, 1f)); // mesh silinder setinggi 2 unit
+                Renderer thigh = Part(meshes.Orb, "Thigh_" + i, visual, new Vector3(x * 1.05f, 1.45f, z), Vector3.zero, new Vector3(0.95f, 1.1f, 1.2f), p.DragonDark);
+                flashTargets.Add(thigh);
+                Renderer leg = Part(meshes.Frustum, "Leg_" + i, visual, new Vector3(x, 0.7f, z + 0.05f), new Vector3(-90f, 0f, 0f), new Vector3(0.6f, 0.6f, 1.4f), p.DragonDark);
+                Hurtbox(leg.gameObject, dragon, 1f, "Leg", Vector3.one);
                 flashTargets.Add(leg);
-                flashTargets.Add(Primitive(PrimitiveType.Cube, "Claw_" + i, visual, new Vector3(x, 0.12f, z + 0.25f), Vector3.zero, new Vector3(0.7f, 0.24f, 0.9f), p.DragonHorn));
+                for (int c = -1; c <= 1; c++)
+                {
+                    flashTargets.Add(Part(meshes.Cone, "Claw_" + i + "_" + (c + 1), visual, new Vector3(x + c * 0.18f, 0.1f, z + 0.38f),
+                                          new Vector3(15f, c * 15f, 0f), new Vector3(0.16f, 0.12f, 0.42f), p.DragonHorn));
+                }
             }
 
             // Sayap
-            Transform wingL = CreateWing("WingL", visual, new Vector3(-1.1f, 2.8f, 0.4f), -1f, p, flashTargets);
-            Transform wingR = CreateWing("WingR", visual, new Vector3(1.1f, 2.8f, 0.4f), 1f, p, flashTargets);
+            Transform wingL = CreateWing("WingL", visual, new Vector3(-1.1f, 2.85f, 0.5f), -1f, p, flashTargets);
+            Transform wingR = CreateWing("WingR", visual, new Vector3(1.1f, 2.85f, 0.5f), 1f, p, flashTargets);
 
             Transform aim = new GameObject("AimPoint").transform;
             aim.SetParent(root.transform, false);
@@ -484,9 +756,12 @@ namespace Multiverse.Games.DragonHunter.EditorTools
             Transform pivot = new GameObject(name).transform;
             pivot.SetParent(parent, false);
             pivot.localPosition = pos;
-            flashTargets.Add(Primitive(PrimitiveType.Cube, "Membrane", pivot, new Vector3(2.1f * side, 0f, -0.4f), Vector3.zero, new Vector3(4.2f, 0.07f, 2.6f), p.DragonWing));
-            flashTargets.Add(Primitive(PrimitiveType.Cube, "Bone", pivot, new Vector3(2.2f * side, 0.05f, 0.9f), Vector3.zero, new Vector3(4.4f, 0.18f, 0.18f), p.DragonDark));
-            flashTargets.Add(Primitive(PrimitiveType.Cube, "Talon", pivot, new Vector3(4.45f * side, 0.05f, 0.9f), new Vector3(0f, 0f, 0f), new Vector3(0.3f, 0.3f, 0.3f), p.DragonHorn));
+
+            // Mesh selaput mengarah ke +X; sayap kiri dicerminkan lewat skala X negatif.
+            flashTargets.Add(Part(meshes.WingMembrane, "Membrane", pivot, Vector3.zero, Vector3.zero, new Vector3(5.2f * side, 1f, 3.6f), p.DragonWing));
+            flashTargets.Add(Part(meshes.Frustum, "ArmBone", pivot, new Vector3(1.2f * side, 0.05f, 1.15f), new Vector3(0f, -90f * side, 0f), new Vector3(0.22f, 0.22f, 2.5f), p.DragonDark));
+            flashTargets.Add(Part(meshes.Frustum, "HandBone", pivot, new Vector3(3.7f * side, 0.05f, 1.3f), new Vector3(0f, -95f * side, 0f), new Vector3(0.16f, 0.16f, 2.7f), p.DragonDark));
+            flashTargets.Add(Part(meshes.Cone, "Talon", pivot, new Vector3(2.4f * side, 0.1f, 1.3f), new Vector3(-90f, 0f, 0f), new Vector3(0.22f, 0.22f, 0.45f), p.DragonHorn));
             return pivot;
         }
 
@@ -736,6 +1011,21 @@ namespace Multiverse.Games.DragonHunter.EditorTools
         private static readonly Vector2 BottomLeft = new Vector2(0f, 0f);
         private static readonly Vector2 Center = new Vector2(0.5f, 0.5f);
 
+        private static Renderer Part(Mesh mesh, string name, Transform parent, Vector3 localPos, Vector3 localEuler,
+                                     Vector3 scale, Material material, bool castShadows = true)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            go.transform.localPosition = localPos;
+            go.transform.localRotation = Quaternion.Euler(localEuler);
+            go.transform.localScale = scale;
+            go.AddComponent<MeshFilter>().sharedMesh = mesh;
+            var renderer = go.AddComponent<MeshRenderer>();
+            renderer.sharedMaterial = material;
+            renderer.shadowCastingMode = castShadows ? ShadowCastingMode.On : ShadowCastingMode.Off;
+            return renderer;
+        }
+
         private static Renderer Primitive(PrimitiveType type, string name, Transform parent, Vector3 localPos, Vector3 localEuler,
                                           Vector3 scale, Material material, bool collider = false, bool castShadows = true)
         {
@@ -818,7 +1108,7 @@ namespace Multiverse.Games.DragonHunter.EditorTools
             var go = new GameObject(name, typeof(RectTransform));
             go.transform.SetParent(parent, false);
             var text = go.AddComponent<Text>();
-            text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            text.font = uiFont != null ? uiFont : Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             text.text = content;
             text.fontSize = size;
             text.color = color;
@@ -846,6 +1136,8 @@ namespace Multiverse.Games.DragonHunter.EditorTools
             cb.colorMultiplier = 1f;
             cb.fadeDuration = 0.08f;
             button.colors = cb;
+
+            if (clickAudio != null) UnityEventTools.AddPersistentListener(button.onClick, clickAudio.PlayUiClick);
 
             Text text = CreateText(img.transform, "Label", label, 32, TextColor, TextAnchor.MiddleCenter);
             RectTransform rt = text.rectTransform;

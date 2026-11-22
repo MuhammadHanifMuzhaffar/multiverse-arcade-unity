@@ -1,4 +1,4 @@
-# Dragon Hunter — Dokumen Desain & Teknis (Sprint 1)
+# Dragon Hunter — Dokumen Desain & Teknis (Sprint 1–2)
 
 PIC: Muhammad Hanif (Velmiree) · Scene: `Scenes/DragonHunter_Main.unity` · Assembly: `Multiverse.Games.DragonHunter`
 
@@ -52,10 +52,12 @@ Scripts/
     DragonAttackDefinition, DragonStateMachine
   Hunter/  HunterController, HunterCombat, HunterArrow, HunterInput
   Dragon/  DragonBoss, DragonHurtbox, AttackTelegraph
-  Presentation/  ThirdPersonCamera, DragonHunterHUD, UIBar, HitFlash, ProceduralMeshes
-Editor/   DragonHunterSceneBuilder (asmdef Editor sendiri)
-Tests/    EditMode (20 test) · PlayMode (10 test di scene asli)
-Materials/ 21 material milik Dragon Hunter (palet ember/arang)
+  Presentation/  ThirdPersonCamera, DragonHunterHUD, UIBar, HitFlash, ProceduralMeshes,
+                 DragonHunterAudio, DragonHunterVfx
+Editor/   DragonHunterSceneBuilder, DragonHunterMeshLibrary (asmdef Editor sendiri)
+Tools~/   generate_audio.py (diabaikan Unity)
+Tests/    EditMode (41 test) · PlayMode (15 test di scene asli)
+Materials/ 28 material · Models/ 8 mesh · Audio/ 23 clip · Fonts/ Cinzel (OFL)
 ```
 
 - Input dipisah dari logika (`HunterInput` → API publik), sehingga PlayMode test bisa mengendalikan Hunter tanpa keyboard.
@@ -77,6 +79,24 @@ Perubahan manual di scene akan **tertimpa** saat rebuild. Untuk tuning angka, ub
 - Editor: `Window > General > Test Runner` → EditMode / PlayMode.
 - CLI: `Unity.exe -batchmode -nographics -projectPath <path> -runTests -testPlatform EditMode` (atau `PlayMode`) `-testResults <file.xml>`
 
-## 6. Sprint 2 (berikutnya)
+## 6. Sprint 2: Visual & Audio
 
-Model 3D naga & Hunter, SFX (raungan, api, pedang), musik battle, font eksklusif, efek hit. Setiap aset wajib dicatat di `README_ASSET_MANIFEST.md`.
+Semua aset dibuat sendiri di proyek ini, kecuali satu font OFL. Detail sumber dan lisensi ada di `README_ASSET_MANIFEST.md`.
+
+| Area | Isi |
+| :-- | :-- |
+| Model | 8 mesh low-poly faceted (`Models/`) dari `Editor/DragonHunterMeshLibrary.cs`. Naga: tubuh faceted, tanduk menyapu ke belakang, taring, duri punggung/ekor, selaput sayap bergerigi, cakar. Hunter: zirah, helm bertanduk, jubah, bilah pedang belah ketupat, tabung panah |
+| VFX | Percikan dan bara saat kena (`DragonHunterVfx`), debu saat sapuan ekor/terjangan/Hunter terkena, gelombang kejut Inferno Nova, jejak ayunan pedang (TrailRenderer), jejak panah, bara melayang di arena, api dengan tekstur partikel lembut |
+| SFX | 21 suara disintesis (`Tools~/generate_audio.py`): ayunan, hit ringan/berat, panah, dodge, Hunter terluka, potion, geraman telegraf, raungan Enraged, erangan naga, gigitan, sapuan ekor, semburan api (loop), hentakan terjangan, ledakan nova, kematian naga, fanfare menang/kalah, klik UI |
+| Musik | Dua loop 29 detik (132 BPM, D minor: taiko, ostinato string, brass). Lapis normal dan Enraged diputar **sinkron** lalu di-crossfade daya-konstan selama 2,5 detik saat naga murka. Musik memudar saat menang/kalah |
+| Font | Cinzel (SIL OFL 1.1) untuk seluruh UI Dragon Hunter |
+
+Catatan teknis:
+- Audio 3D (spatial blend 0,6) di posisi naga, audio Hunter 2D. Tetap 1 AudioListener (di kamera). Klik UI memakai `ignoreListenerPause` agar terdengar saat pause.
+- Import audio diatur builder: SFX *Decompress On Load*, musik *Compressed In Memory* (agar dua lapis mulai bersamaan).
+- Efek partikel memakai `Emit()` pada sistem yang sudah ada (tanpa Instantiate per hit).
+- Test baru: `Sprint2AssetTests` (mesh menghadap keluar, < 10.000 tris, audio .ogg, panjang dua lapis musik identik, lisensi font) dan `DragonHunterFeedbackTests` (semua clip terpasang, crossfade Enraged, trail + percikan saat pedang kena, font Cinzel di seluruh UI, musik memudar saat menang).
+
+## 7. Berikutnya (Sprint 3: integrasi)
+
+Uji Hub → Dragon Hunter → Hub di build bersama empat game lain, cek audio tidak bocor ke Hub, dan uji resolusi 1366x768.

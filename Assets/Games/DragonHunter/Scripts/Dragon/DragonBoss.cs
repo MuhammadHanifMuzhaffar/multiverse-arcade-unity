@@ -77,6 +77,9 @@ namespace Multiverse.Games.DragonHunter
         public event Action EnrageStarted;
         public event Action<DragonAttackDefinition> AttackTelegraphed;
 
+        /// <summary>Fase aktif sebuah jurus dimulai (untuk audio/VFX).</summary>
+        public event Action<DragonAttackDefinition> AttackActivated;
+
         public void SetHunter(HunterController target) => hunter = target;
 
         /// <summary>Isi daftar jurus dengan set default (dipakai scene builder dan tombol Reset Inspector).</summary>
@@ -341,6 +344,7 @@ namespace Multiverse.Games.DragonHunter
             currentAttackLanded = false;
             nextTickTime = Time.time;
             if (attack.id == "fire" && fireParticles != null) fireParticles.Play(true);
+            AttackActivated?.Invoke(attack);
         }
 
         private void HandleAttackFinished(DragonAttackDefinition attack) => StopFire();

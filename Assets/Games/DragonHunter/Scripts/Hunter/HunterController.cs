@@ -92,6 +92,7 @@ namespace Multiverse.Games.DragonHunter
         public event Action Died;
         public event Action DodgeStarted;
         public event Action<float> PotionUsed;
+        public event Action DrinkStarted;
 
         private void Awake()
         {
@@ -137,6 +138,7 @@ namespace Multiverse.Games.DragonHunter
 
             PotionsLeft--;
             drinkEndTime = Time.time + potionDrinkTime;
+            DrinkStarted?.Invoke();
             return true;
         }
 

@@ -18,7 +18,7 @@ namespace Multiverse.Games.DragonHunter
         private readonly RaycastHit[] hits = new RaycastHit[8];
 
         public static HunterArrow Spawn(Vector3 origin, Vector3 direction, float speed, float damage, float lifetime,
-                                        Material material, HunterCombat owner)
+                                        Material material, Material trailMaterial, HunterCombat owner)
         {
             GameObject go = GameObject.CreatePrimitive(PrimitiveType.Cube);
             go.name = "HunterArrow";
@@ -29,6 +29,18 @@ namespace Multiverse.Games.DragonHunter
             var renderer = go.GetComponent<Renderer>();
             if (material != null) renderer.sharedMaterial = material;
             renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+
+            if (trailMaterial != null)
+            {
+                var trail = go.AddComponent<TrailRenderer>();
+                trail.sharedMaterial = trailMaterial;
+                trail.time = 0.18f;
+                trail.minVertexDistance = 0.2f;
+                trail.widthMultiplier = 0.12f;
+                trail.widthCurve = AnimationCurve.Linear(0f, 1f, 1f, 0f);
+                trail.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                trail.receiveShadows = false;
+            }
 
             var arrow = go.AddComponent<HunterArrow>();
             arrow.direction = direction.normalized;

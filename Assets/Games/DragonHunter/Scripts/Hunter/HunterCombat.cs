@@ -59,6 +59,10 @@ namespace Multiverse.Games.DragonHunter
         [SerializeField] private DragonBoss target;
         [SerializeField] private Transform aimCamera;
 
+        [Header("Efek")]
+        [SerializeField] private TrailRenderer swordTrail;
+        [SerializeField] private Material arrowTrailMaterial;
+
         private HunterController hunter;
         private Phase phase = Phase.None;
         private float phaseEndTime;
@@ -75,8 +79,13 @@ namespace Multiverse.Games.DragonHunter
         public bool InRecovery => phase == Phase.Recovery;
         public int ComboIndex => comboIndex;
 
-        /// <summary>(damage, titik kena, berat?) setiap kali serangan Hunter mengenai naga.</summary>
+        /// <summary>(damage, titik kena, berat?) setiap kali serangan pedang Hunter mengenai naga.</summary>
         public event Action<float, Vector3, bool> HitLanded;
+
+        /// <summary>(berat?, tahap combo) saat ayunan masuk fase aktif.</summary>
+        public event Action<bool, int> SwingStarted;
+        public event Action ArrowShot;
+        public event Action<Vector3> ArrowLanded;
 
         private void Awake()
         {
@@ -140,7 +149,8 @@ namespace Multiverse.Games.DragonHunter
             Vector3 origin = arrowSpawn != null ? arrowSpawn.position : transform.position + Vector3.up * 1.3f + transform.forward * 0.8f;
             Vector3 direction = ResolveArrowDirection(origin);
             hunter.FaceTowards(transform.position + direction);
-            HunterArrow.Spawn(origin, direction, arrowSpeed, arrowDamage, arrowMaxRange / arrowSpeed, arrowMaterial, this);
+            HunterArrow.Spawn(origin, direction, arrowSpeed, arrowDamage, arrowMaxRange / arrowSpeed, arrowMaterial, arrowTrailMaterial, this);
+            ArrowShot?.Invoke();
             return true;
         }
 
@@ -153,9 +163,20 @@ namespace Multiverse.Games.DragonHunter
             hunter.CombatMoveMultiplier = 1f;
             hunter.FacingLocked = false;
             if (swordPivot != null) swordPivot.localRotation = swordRestRotation;
+            SetTrail(false);
         }
 
-        internal void NotifyArrowHit(float damage, Vector3 point) => HitLanded?.Invoke(damage, point, false);
+        internal void NotifyArrowHit(float damage, Vector3 point)
+        {
+            ArrowLanded?.Invoke(point);
+        }
+
+        private void SetTrail(bool emitting)
+        {
+            if (swordTrail == null) return;
+            if (emitting && !swordTrail.emitting) swordTrail.Clear();
+            swordTrail.emitting = emitting;
+        }
 
         // ------------------------------------------------------------------ Loop
         private void Update()
@@ -179,11 +200,14 @@ namespace Multiverse.Games.DragonHunter
                     phase = Phase.Active;
                     phaseEndTime = now + current.active;
                     hunter.CombatMoveMultiplier = 0.1f;
+                    SetTrail(true);
+                    SwingStarted?.Invoke(currentIsHeavy, comboIndex);
                     ApplyMeleeHit();
                     break;
 
                 case Phase.Active:
                     phase = Phase.Recovery;
+                    SetTrail(false);
                     phaseEndTime = now + (queuedLight ? Mathf.Min(current.recovery, ComboChainDelay) : current.recovery);
                     hunter.CombatMoveMultiplier = 0.4f;
                     break;
