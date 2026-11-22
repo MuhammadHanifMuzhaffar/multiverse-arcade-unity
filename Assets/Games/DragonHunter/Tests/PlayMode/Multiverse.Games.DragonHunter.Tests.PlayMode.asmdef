@@ -1,0 +1,22 @@
+{
+    "name": "Multiverse.Games.DragonHunter.Tests.PlayMode",
+    "rootNamespace": "Multiverse.Games.DragonHunter.Tests",
+    "references": [
+        "Multiverse.Games.DragonHunter",
+        "UnityEngine.TestRunner",
+        "UnityEngine.UI"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

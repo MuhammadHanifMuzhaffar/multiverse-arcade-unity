@@ -1,158 +1,235 @@
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 namespace Multiverse.Games.DragonHunter
 {
     /// <summary>
     /// Game Manager untuk Dragon Hunter (PIC: Muhammad Hanif / Velmiree).
-    /// Terinspirasi Monster Hunter World: Boss Fight dengan telegraf serangan naga,
-    /// sistem stamina, dodge roll (i-frame), dan manajemen fase pertarungan.
+    /// Mengatur alur pertarungan: fase bertarung/pause/menang/kalah, timer quest,
+    /// rekor waktu tercepat, serta pemulihan state global (timeScale, audio, kursor)
+    /// agar tidak bocor ke Hub atau game lain.
     /// </summary>
     public class DragonHunterManager : MonoBehaviour
     {
-        public enum DragonState
-        {
-            Idle,
-            TelegraphAttack, // Indikator serangan naga (windup)
-            Attacking,       // Serangan aktif (semburan api/sapuan ekor)
-            Vulnerable,      // Jendela waktu naga lelah/rentan diserang
-            Enraged          // Mode murka (kecepatan meningkat)
-        }
+        public enum BattlePhase { Fighting, Paused, Victory, Defeat }
 
-        [Header("Statistik Hunter (Pemain)")]
-        [SerializeField] private float maxHunterHP = 150f;
-        [SerializeField] private float currentHunterHP;
-        [SerializeField] private float maxStamina = 100f;
-        [SerializeField] private float currentStamina;
-        [SerializeField] private float staminaRegenRate = 20f;
-        [SerializeField] private float dodgeStaminaCost = 25f;
+        /// <summary>Key PlayerPrefs wajib ber-prefix nama game (konvensi README).</summary>
+        public const string BestTimeKey = "DragonHunter.BestClearTime";
 
-        [Header("Statistik Boss Naga")]
-        [SerializeField] private float maxDragonHP = 1000f;
-        [SerializeField] private float currentDragonHP;
-        [SerializeField] private DragonState currentDragonState = DragonState.Idle;
+        [Header("Referensi Gameplay")]
+        [SerializeField] private HunterController hunter;
+        [SerializeField] private HunterCombat combat;
+        [SerializeField] private DragonBoss dragon;
+        [SerializeField] private ThirdPersonCamera cameraRig;
+        [SerializeField] private DragonHunterHUD hud;
 
-        [Header("UI Status")]
-        [SerializeField] private Slider hunterHPSlider;
-        [SerializeField] private Slider staminaSlider;
-        [SerializeField] private Slider dragonHPSlider;
-        [SerializeField] private Text bossStatusText;
+        [Header("Panel UI")]
+        [SerializeField] private GameObject pausePanel;
         [SerializeField] private GameObject victoryPanel;
         [SerializeField] private GameObject defeatPanel;
+        [SerializeField] private Text victoryDetailText;
+        [SerializeField] private Text defeatDetailText;
 
-        // I-frame berbasis waktu akhir (bukan flag bool + coroutine) agar dodge beruntun
-        // tidak saling memotong: coroutine pertama dulu bisa mematikan i-frame dodge kedua.
-        private float iFrameEndTime = -1f;
-        private bool isBattleOver = false;
+        [Header("Pengaturan")]
+        [SerializeField] private KeyCode pauseKey = KeyCode.Escape;
+        [SerializeField] private float resultPanelDelay = 1.6f;
+        [SerializeField] private bool lockCursorDuringFight = true;
 
-        public bool IsInvulnerable => Time.time < iFrameEndTime;
-        public bool IsBattleOver => isBattleOver;
+        private float resultShowTime = -1f;
+        private int previousTargetFrameRate;
+        private bool newRecord;
+
+        public BattlePhase Phase { get; private set; } = BattlePhase.Fighting;
+        public float ElapsedTime { get; private set; }
+        public bool IsBattleOver => Phase == BattlePhase.Victory || Phase == BattlePhase.Defeat;
+        public bool IsPaused => Phase == BattlePhase.Paused;
+        public bool AcceptsGameplayInput => Phase == BattlePhase.Fighting;
+
+        public HunterController Hunter => hunter;
+        public HunterCombat Combat => combat;
+        public DragonBoss Dragon => dragon;
+        public GameObject PausePanel => pausePanel;
+        public GameObject VictoryPanel => victoryPanel;
+        public GameObject DefeatPanel => defeatPanel;
+
+        /// <summary>Rekor waktu tercepat dalam detik; 0 bila belum pernah menang.</summary>
+        public static float BestClearTime => PlayerPrefs.GetFloat(BestTimeKey, 0f);
+
+        private void Awake()
+        {
+            previousTargetFrameRate = Application.targetFrameRate;
+            Application.targetFrameRate = 60;
+
+            // Mulai dari state global yang bersih, apa pun yang ditinggalkan scene sebelumnya.
+            Time.timeScale = 1f;
+            AudioListener.pause = false;
+        }
 
         private void Start()
         {
-            currentHunterHP = maxHunterHP;
-            currentStamina = maxStamina;
-            currentDragonHP = maxDragonHP;
-            currentDragonState = DragonState.Idle;
-            isBattleOver = false;
-            iFrameEndTime = -1f;
+            if (hunter != null) hunter.Died += HandleHunterDied;
+            if (hunter != null) hunter.Damaged += HandleHunterDamaged;
+            if (dragon != null) dragon.Died += HandleDragonDied;
+            if (dragon != null) dragon.EnrageStarted += HandleEnrage;
+            if (combat != null) combat.HitLanded += HandleHitLanded;
 
-            SetDragonState(currentDragonState); // isi bossStatusText sejak awal
-            UpdateUI();
-            if (victoryPanel != null) victoryPanel.SetActive(false);
-            if (defeatPanel != null) defeatPanel.SetActive(false);
+            if (hud != null) hud.Bind(this, hunter, dragon, cameraRig);
+
+            SetPanel(pausePanel, false);
+            SetPanel(victoryPanel, false);
+            SetPanel(defeatPanel, false);
+
+            Phase = BattlePhase.Fighting;
+            ApplyCursor(locked: lockCursorDuringFight);
+        }
+
+        private void OnDestroy()
+        {
+            if (hunter != null) { hunter.Died -= HandleHunterDied; hunter.Damaged -= HandleHunterDamaged; }
+            if (dragon != null) { dragon.Died -= HandleDragonDied; dragon.EnrageStarted -= HandleEnrage; }
+            if (combat != null) combat.HitLanded -= HandleHitLanded;
+
+            // Pengaman terakhir saat scene ditinggalkan (ReturnToHub juga mereset ini).
+            Time.timeScale = 1f;
+            AudioListener.pause = false;
+            Application.targetFrameRate = previousTargetFrameRate;
+            ApplyCursor(locked: false);
         }
 
         private void Update()
         {
-            if (isBattleOver) return;
+            if (Input.GetKeyDown(pauseKey) && (Phase == BattlePhase.Fighting || Phase == BattlePhase.Paused))
+                TogglePause();
 
-            // Regenerasi stamina alami
-            if (currentStamina < maxStamina)
+            if (Phase == BattlePhase.Fighting)
+                ElapsedTime += Time.deltaTime;
+
+            if (resultShowTime > 0f && Time.unscaledTime >= resultShowTime)
             {
-                currentStamina = Mathf.Min(currentStamina + (staminaRegenRate * Time.deltaTime), maxStamina);
-                if (staminaSlider != null) staminaSlider.value = currentStamina / maxStamina;
+                resultShowTime = -1f;
+                ShowResultPanel();
             }
         }
 
-        /// <summary>
-        /// Aksi serang Hunter ke Boss Naga
-        /// </summary>
-        public void HunterAttack(float damage)
+        // ------------------------------------------------------------------ Pause
+        public void TogglePause()
         {
-            if (isBattleOver || damage <= 0f) return;
+            if (Phase == BattlePhase.Paused) Resume();
+            else Pause();
+        }
 
-            // Jika naga dalam status Vulnerable, berikan critical multiplier 1.5x
-            float finalDamage = (currentDragonState == DragonState.Vulnerable) ? damage * 1.5f : damage;
-            currentDragonHP = Mathf.Max(0f, currentDragonHP - finalDamage);
+        public void Pause()
+        {
+            if (Phase != BattlePhase.Fighting) return;
+            Phase = BattlePhase.Paused;
+            Time.timeScale = 0f;
+            AudioListener.pause = true;
+            if (hunter != null) hunter.ControlsEnabled = false;
+            SetPanel(pausePanel, true);
+            ApplyCursor(locked: false);
+        }
 
-            Debug.Log($"[DragonHunter] Hunter hit Dragon! Damage: {finalDamage}. Sisa HP Naga: {currentDragonHP}");
-            UpdateUI();
+        public void Resume()
+        {
+            if (Phase != BattlePhase.Paused) return;
+            Phase = BattlePhase.Fighting;
+            Time.timeScale = 1f;
+            AudioListener.pause = false;
+            if (hunter != null) hunter.ControlsEnabled = true;
+            SetPanel(pausePanel, false);
+            ApplyCursor(locked: lockCursorDuringFight);
+        }
 
-            if (currentDragonHP <= 0f)
+        /// <summary>Muat ulang quest (tombol Retry).</summary>
+        public void Retry()
+        {
+            Time.timeScale = 1f;
+            AudioListener.pause = false;
+            SceneManager.LoadScene(gameObject.scene.name);
+        }
+
+        // ------------------------------------------------------------------ Hasil
+        private void HandleDragonDied()
+        {
+            if (IsBattleOver) return;
+            Phase = BattlePhase.Victory;
+            if (hunter != null) hunter.ControlsEnabled = false;
+            if (combat != null) combat.CancelAttack();
+            if (cameraRig != null) cameraRig.Shake(0.4f, 1.0f);
+
+            float best = BestClearTime;
+            newRecord = best <= 0f || ElapsedTime < best;
+            if (newRecord)
             {
-                TriggerVictory();
+                PlayerPrefs.SetFloat(BestTimeKey, ElapsedTime);
+                PlayerPrefs.Save();
+            }
+
+            if (hud != null) hud.ShowMessage("QUEST CLEAR!", resultPanelDelay);
+            resultShowTime = Time.unscaledTime + resultPanelDelay;
+        }
+
+        private void HandleHunterDied()
+        {
+            if (IsBattleOver) return;
+            Phase = BattlePhase.Defeat;
+            if (hunter != null) hunter.ControlsEnabled = false;
+            if (dragon != null) dragon.Halt();
+            if (hud != null) hud.ShowMessage("You fainted...", resultPanelDelay);
+            resultShowTime = Time.unscaledTime + resultPanelDelay;
+        }
+
+        private void ShowResultPanel()
+        {
+            ApplyCursor(locked: false);
+
+            if (Phase == BattlePhase.Victory)
+            {
+                if (victoryDetailText != null)
+                {
+                    string record = newRecord ? "NEW RECORD!" : "Best: " + DragonHunterHUD.FormatTime(BestClearTime);
+                    victoryDetailText.text = "Clear time  " + DragonHunterHUD.FormatTime(ElapsedTime) + "\n" + record;
+                }
+                SetPanel(victoryPanel, true);
+            }
+            else if (Phase == BattlePhase.Defeat)
+            {
+                if (defeatDetailText != null)
+                {
+                    float hpLeft = dragon != null ? dragon.Health.Fraction * 100f : 0f;
+                    defeatDetailText.text = "Dragon HP left  " + Mathf.CeilToInt(hpLeft) + "%\nTime  " + DragonHunterHUD.FormatTime(ElapsedTime);
+                }
+                SetPanel(defeatPanel, true);
             }
         }
 
-        /// <summary>
-        /// Aksi Dodge Roll Hunter (menghindari serangan dengan biaya stamina)
-        /// </summary>
-        public bool AttemptDodgeRoll(float iframeDuration = 0.6f)
+        // ------------------------------------------------------------------ Feedback
+        private void HandleHunterDamaged(float damage)
         {
-            if (isBattleOver || currentStamina < dodgeStaminaCost) return false;
-
-            currentStamina -= dodgeStaminaCost;
-            iFrameEndTime = Mathf.Max(iFrameEndTime, Time.time + iframeDuration);
-            UpdateUI();
-            return true;
+            if (cameraRig != null) cameraRig.Shake(Mathf.Clamp(damage / 80f, 0.12f, 0.45f), 0.3f);
         }
 
-        /// <summary>
-        /// Naga memberi damage ke Hunter
-        /// </summary>
-        public void DamageHunter(float damage)
+        private void HandleHitLanded(float damage, Vector3 point, bool heavy)
         {
-            if (isBattleOver || IsInvulnerable || damage <= 0f) return;
-
-            currentHunterHP = Mathf.Max(0f, currentHunterHP - damage);
-            Debug.Log($"[DragonHunter] Hunter terkena serangan! Sisa HP: {currentHunterHP}");
-            UpdateUI();
-
-            if (currentHunterHP <= 0f)
-            {
-                TriggerDefeat();
-            }
+            if (heavy && cameraRig != null) cameraRig.Shake(0.15f, 0.15f);
         }
 
-        public void SetDragonState(DragonState newState)
+        private void HandleEnrage()
         {
-            currentDragonState = newState;
-            if (bossStatusText != null)
-            {
-                bossStatusText.text = $"Dragon: {currentDragonState}";
-            }
+            if (cameraRig != null) cameraRig.Shake(0.3f, 1.4f);
         }
 
-        private void UpdateUI()
+        // ------------------------------------------------------------------ Helper
+        private static void SetPanel(GameObject panel, bool visible)
         {
-            if (hunterHPSlider != null) hunterHPSlider.value = currentHunterHP / maxHunterHP;
-            if (dragonHPSlider != null) dragonHPSlider.value = currentDragonHP / maxDragonHP;
-            if (staminaSlider != null) staminaSlider.value = currentStamina / maxStamina;
+            if (panel != null) panel.SetActive(visible);
         }
 
-        private void TriggerVictory()
+        private static void ApplyCursor(bool locked)
         {
-            isBattleOver = true;
-            Debug.Log("[DragonHunter] TARGET ELIMINATED! Quest Complete (Victory).");
-            if (victoryPanel != null) victoryPanel.SetActive(true);
-        }
-
-        private void TriggerDefeat()
-        {
-            isBattleOver = true;
-            Debug.Log("[DragonHunter] HUNTER FAINTED! Quest Failed.");
-            if (defeatPanel != null) defeatPanel.SetActive(true);
+            Cursor.lockState = locked ? CursorLockMode.Locked : CursorLockMode.None;
+            Cursor.visible = !locked;
         }
     }
 }

@@ -1,0 +1,20 @@
+{
+    "name": "Multiverse.Games.DragonHunter.Editor",
+    "rootNamespace": "Multiverse.Games.DragonHunter.EditorTools",
+    "references": [
+        "Multiverse.Games.DragonHunter",
+        "Multiverse.Hub",
+        "UnityEngine.UI"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
