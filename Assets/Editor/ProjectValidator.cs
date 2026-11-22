@@ -358,6 +358,14 @@ namespace Multiverse.EditorTools
                 Add(f, Level.Error, "SCN-008", $"{name}: tidak ada komponen ReturnToHub (tombol Back to Hub).");
             }
 
+            foreach (Button b in UnityEngine.Object.FindObjectsOfType<Button>(true))
+            {
+                if (b.transition == Selectable.Transition.ColorTint && b.targetGraphic is Image img && img.color != Color.white)
+                    Add(f, Level.Warning, "SCN-010",
+                        $"{name}: tombol '{b.name}' memakai ColorTint dengan warna Image bukan putih; warna tampil dikalikan " +
+                        "(lebih gelap dari ColorBlock). Set Image.color = putih dan atur warna di ColorBlock.");
+            }
+
             int missing = 0;
             foreach (GameObject root in UnityEditor.SceneManagement.EditorSceneManager.GetActiveScene().GetRootGameObjects())
                 foreach (Transform t in root.GetComponentsInChildren<Transform>(true))
