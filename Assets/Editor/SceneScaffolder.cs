@@ -53,6 +53,55 @@ namespace Multiverse.EditorTools
             }
         }
 
+        [MenuItem("Tools/Multiverse/Repair Hub Button Tint (Integrator)", false, 21)]
+        public static void RepairHubButtonsFromMenu()
+        {
+            if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
+            int fixedCount = RepairButtonTint(SceneCatalog.HubScenePath);
+            EditorUtility.DisplayDialog("Multiverse", fixedCount + " tombol MainMenu diperbaiki.", "OK");
+        }
+
+        /// <summary>CLI: -executeMethod Multiverse.EditorTools.SceneScaffolder.RepairHubButtonsBatch</summary>
+        public static void RepairHubButtonsBatch()
+        {
+            try
+            {
+                int fixedCount = RepairButtonTint(SceneCatalog.HubScenePath);
+                Debug.Log($"[Multiverse] Tombol Hub diperbaiki: {fixedCount}");
+                EditorApplication.Exit(0);
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[Multiverse] Perbaikan tombol Hub gagal: " + e);
+                EditorApplication.Exit(1);
+            }
+        }
+
+        /// <summary>
+        /// Set warna Image tombol ColorTint menjadi putih agar warna ColorBlock tampil apa adanya.
+        /// Hanya dipakai untuk scene milik Integrator (Hub); scene game adalah milik PIC masing-masing.
+        /// </summary>
+        public static int RepairButtonTint(string scenePath)
+        {
+            var scene = EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Single);
+            int count = 0;
+            foreach (Button b in UnityEngine.Object.FindObjectsOfType<Button>(true))
+            {
+                if (b.transition != Selectable.Transition.ColorTint) continue;
+                if (!(b.targetGraphic is Image img) || img.color == Color.white) continue;
+                Undo.RecordObject(img, "Repair button tint");
+                img.color = Color.white;
+                EditorUtility.SetDirty(img);
+                count++;
+            }
+            if (count > 0)
+            {
+                EditorSceneManager.MarkSceneDirty(scene);
+                EditorSceneManager.SaveScene(scene);
+            }
+            return count;
+        }
+
         [MenuItem("Tools/Multiverse/Create Missing Skeleton Scenes", false, 20)]
         public static void CreateMissingScenes()
         {
@@ -269,7 +318,9 @@ namespace Multiverse.EditorTools
 
         private static Button CreateButton(Transform parent, string name, string label, Theme t, int fontSize)
         {
-            Image img = CreateImage(parent, name, t.Surface);
+            // Image wajib putih: transisi ColorTint MENGALIKAN warna Image dengan warna ColorBlock.
+            // Dulu Image = t.Surface sehingga warna tampil Surface x Surface (jauh lebih gelap).
+            Image img = CreateImage(parent, name, Color.white);
             var button = img.gameObject.AddComponent<Button>();
             button.targetGraphic = img;
 
